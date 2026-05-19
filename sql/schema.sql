@@ -1,0 +1,56 @@
+-- ydocter health records schema (SQLite)
+
+PRAGMA journal_mode = WAL;
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE IF NOT EXISTS test_items (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    major_category    TEXT    NOT NULL,
+    minor_category    TEXT    NOT NULL,
+    code              TEXT,
+    name              TEXT    NOT NULL,
+    unit              TEXT,
+    ref_min           REAL,
+    ref_max           REAL,
+    ref_indicator     TEXT,
+    related_diseases  TEXT,
+    memo              TEXT,
+    UNIQUE (major_category, minor_category, name)
+);
+
+CREATE TABLE IF NOT EXISTS measurements (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id       INTEGER NOT NULL REFERENCES test_items(id) ON DELETE CASCADE,
+    year          INTEGER NOT NULL,
+    value_numeric REAL,
+    value_text    TEXT,
+    UNIQUE (item_id, year)
+);
+
+CREATE INDEX IF NOT EXISTS idx_items_major  ON test_items(major_category);
+CREATE INDEX IF NOT EXISTS idx_items_minor  ON test_items(minor_category);
+CREATE INDEX IF NOT EXISTS idx_measure_item ON measurements(item_id);
+CREATE INDEX IF NOT EXISTS idx_measure_year ON measurements(year);
+
+CREATE VIEW IF NOT EXISTS v_measurements AS
+SELECT
+    m.id           AS measurement_id,
+    i.id           AS item_id,
+    i.major_category,
+    i.minor_category,
+    i.code,
+    i.name,
+    i.ref_min,
+    i.ref_max,
+    i.related_diseases,
+    m.year,
+    m.value_numeric,
+    m.value_text,
+    CASE
+        WHEN m.value_numeric IS NULL THEN NULL
+        WHEN i.ref_min IS NOT NULL AND m.value_numeric < i.ref_min THEN 'LOW'
+        WHEN i.ref_max IS NOT NULL AND m.value_numeric > i.ref_max THEN 'HIGH'
+        ELSE 'NORMAL'
+    END AS status
+FROM measurements m
+JOIN test_items   i ON i.id = m.item_id;

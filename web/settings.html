@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>ydocter — Reference Settings</title>
+  <meta name="description" content="Adjust the clinical reference range used to flag indicators as HIGH or LOW." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body class="settings-mode">
+  <header class="masthead">
+    <div class="masthead-row">
+      <div class="brand">
+        <span class="brand-mark">y</span>
+        <span class="brand-name">ydocter</span>
+        <span class="brand-tag">Reference Settings</span>
+      </div>
+      <div class="rail">
+        <span class="rail-cell">
+          <span class="rail-label">Editable</span>
+          <span class="rail-value" id="rail-items">—</span>
+        </span>
+        <span class="rail-cell">
+          <span class="rail-label">Pending</span>
+          <span class="rail-value" id="rail-pending">0</span>
+        </span>
+        <a class="rail-cell rail-cell--action" href="/">
+          <span class="rail-label">Return</span>
+          <span class="rail-value">← Dashboard</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <section class="settings-intro">
+    <h1 class="settings-title">Clinical reference ranges</h1>
+    <p class="settings-lede">
+      Adjust the <strong>min</strong>, <strong>max</strong>, or notes for each indicator. Changes save on blur and immediately re-classify every measurement as HIGH / LOW / NORMAL.
+      Empty fields leave the bound open.
+    </p>
+    <div class="settings-callouts">
+      <div class="callout">
+        <span class="callout-label">Cleared min</span>
+        <span class="callout-body">No floor — only flagged HIGH when above max.</span>
+      </div>
+      <div class="callout">
+        <span class="callout-label">Cleared max</span>
+        <span class="callout-body">No ceiling — only flagged LOW when below min.</span>
+      </div>
+      <div class="callout">
+        <span class="callout-label">Restore</span>
+        <span class="callout-body">Re-run <code>python -m app.load_data</code> to wipe edits.</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="controls">
+    <label class="search">
+      <span class="search-glyph" aria-hidden="true">⌕</span>
+      <input id="search" type="search" placeholder="Search indicator, code, or condition" autocomplete="off" />
+    </label>
+    <div class="chipset" id="chipset" role="tablist" aria-label="Categories"></div>
+  </section>
+
+  <main class="ledger" id="ledger" aria-live="polite"></main>
+
+  <div class="toast" id="toast" aria-live="polite"></div>
+
+  <script src="/assets/settings.js" defer></script>
+</body>
+</html>

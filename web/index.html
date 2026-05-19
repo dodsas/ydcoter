@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>ydocter — Personal Health Ledger</title>
+  <meta name="description" content="Longitudinal record of personal health checkups, 2015 – 2025." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,300;1,6..72,400&family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+  <header class="masthead">
+    <div class="masthead-row">
+      <div class="brand">
+        <span class="brand-mark">y</span>
+        <span class="brand-name">ydocter</span>
+        <span class="brand-tag">Health Records</span>
+      </div>
+      <div class="rail">
+        <span class="rail-cell">
+          <span class="rail-label">Items</span>
+          <span class="rail-value" id="rail-items">—</span>
+        </span>
+        <span class="rail-cell">
+          <span class="rail-label">Records</span>
+          <span class="rail-value" id="rail-measurements">—</span>
+        </span>
+        <span class="rail-cell">
+          <span class="rail-label">Latest</span>
+          <span class="rail-value" id="rail-latest">—</span>
+        </span>
+        <a class="rail-cell rail-cell--action" href="/settings">
+          <span class="rail-label">Adjust</span>
+          <span class="rail-value">References →</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <section class="headlines" id="headlines">
+    <article class="headline headline--high">
+      <div class="headline-meta">
+        <span class="headline-kicker">Above range</span>
+        <span class="headline-tag" id="headline-high-year">—</span>
+      </div>
+      <div class="headline-value" id="count-high">—</div>
+      <div class="headline-label">HIGH indicators at latest reading</div>
+    </article>
+
+    <article class="headline headline--low">
+      <div class="headline-meta">
+        <span class="headline-kicker">Below range</span>
+        <span class="headline-tag" id="headline-low-year">—</span>
+      </div>
+      <div class="headline-value" id="count-low">—</div>
+      <div class="headline-label">LOW indicators at latest reading</div>
+    </article>
+
+    <article class="headline headline--watch">
+      <div class="headline-meta">
+        <span class="headline-kicker">Watch list</span>
+        <span class="headline-tag">Recurring anomalies</span>
+      </div>
+      <ul class="watchlist" id="watchlist"></ul>
+    </article>
+
+    <article class="headline headline--coverage">
+      <div class="headline-meta">
+        <span class="headline-kicker">Coverage</span>
+        <span class="headline-tag" id="headline-coverage-year">—</span>
+      </div>
+      <div class="headline-value">
+        <span id="count-coverage">—</span><span class="headline-fraction">/<span id="count-total">—</span></span>
+      </div>
+      <div class="headline-label">Items measured this year</div>
+    </article>
+  </section>
+
+  <section class="controls">
+    <label class="search">
+      <span class="search-glyph" aria-hidden="true">⌕</span>
+      <input id="search" type="search" placeholder="Search indicator, code, or condition" autocomplete="off" />
+    </label>
+    <div class="chipset" id="chipset" role="tablist" aria-label="Categories"></div>
+  </section>
+
+  <main class="ledger" id="ledger" aria-live="polite"></main>
+
+  <footer class="footer">
+    <div class="footer-legend">
+      <span class="legend legend--high">HIGH</span>
+      <span class="legend legend--low">LOW</span>
+      <span class="legend legend--normal">NORMAL</span>
+    </div>
+    <div class="footer-meta">
+      <span>SQLite · FastAPI</span>
+      <span class="footer-dot">·</span>
+      <a href="/docs">API /docs</a>
+    </div>
+  </footer>
+
+  <aside class="detail" id="detail" aria-hidden="true">
+    <button class="detail-close" id="detail-close" aria-label="Close detail panel">
+      <span aria-hidden="true">✕</span>
+    </button>
+    <div class="detail-body" id="detail-body"></div>
+  </aside>
+  <div class="detail-scrim" id="detail-scrim" aria-hidden="true"></div>
+
+  <script src="/assets/app.js" defer></script>
+</body>
+</html>
