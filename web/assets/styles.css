@@ -564,6 +564,13 @@ a:hover { border-bottom-color: var(--ink); }
   min-width: 0;
 }
 
+.chipset::-webkit-scrollbar { height: 4px; }
+.chipset::-webkit-scrollbar-track { background: transparent; }
+.chipset::-webkit-scrollbar-thumb {
+  background: var(--rule-strong);
+  border-radius: 2px;
+}
+
 .chip {
   font-family: var(--mono);
   font-size: 0.7rem;
@@ -645,6 +652,18 @@ a:hover { border-bottom-color: var(--ink); }
     minmax(110px, 1fr)
     repeat(6, minmax(60px, 1fr))
     minmax(90px, 1.2fr);
+  /* allow horizontal scroll when columns overflow (mobile). The
+     section-head above stays put; only the table strip moves. */
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-strong) transparent;
+}
+
+.section-table::-webkit-scrollbar { height: 6px; }
+.section-table::-webkit-scrollbar-track { background: transparent; }
+.section-table::-webkit-scrollbar-thumb {
+  background: var(--rule-strong);
+  border-radius: 4px;
 }
 
 .section-row,
@@ -665,7 +684,15 @@ a:hover { border-bottom-color: var(--ink); }
   text-align: right;
 }
 
-.section-headrow .head-indicator { text-align: left; }
+.section-headrow .head-indicator {
+  text-align: left;
+  /* sticky during horizontal scroll so the column header stays in view */
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: var(--surface-2);
+  box-shadow: 1px 0 0 var(--rule);
+}
 .section-headrow .head-ref       { text-align: right; }
 .section-headrow .head-spark     { text-align: right; padding-right: 0.4rem; }
 
@@ -684,14 +711,25 @@ a:hover { border-bottom-color: var(--ink); }
 .section-row.is-active > * { background: var(--surface-3); }
 
 .section-row.is-active .cell-indicator {
-  box-shadow: inset 3px 0 0 var(--ink);
+  /* preserve sticky right-edge separator alongside the active left bar */
+  box-shadow: inset 3px 0 0 var(--ink), 1px 0 0 var(--rule);
 }
 
 .cell-indicator {
   flex-direction: column;
   align-items: flex-start !important;
   gap: 0.15rem;
+  /* sticky leftmost column on horizontal scroll. Needs solid bg + z-index
+     so HIGH/LOW status cells don't bleed through. */
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface);
+  box-shadow: 1px 0 0 var(--rule);
 }
+
+.section-row:hover .cell-indicator { background: var(--surface-2); }
+.section-row.is-active .cell-indicator { background: var(--surface-3); }
 
 .cell-indicator .primary {
   font-family: var(--sans);
@@ -1177,6 +1215,15 @@ a:hover { border-bottom-color: var(--ink); }
     minmax(96px, 0.9fr)
     minmax(200px, 2.4fr)
     minmax(120px, 0.9fr);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-strong) transparent;
+}
+
+.settings-grid::-webkit-scrollbar { height: 6px; }
+.settings-grid::-webkit-scrollbar-thumb {
+  background: var(--rule-strong);
+  border-radius: 4px;
 }
 
 .settings-row {
@@ -1412,13 +1459,21 @@ a:hover { border-bottom-color: var(--ink); }
 
   .controls { flex-direction: column; align-items: stretch; gap: 0.75rem; }
   .search { flex: 1; }
-  .chipset { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 0.25rem; }
+  .chipset {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+    /* slim, always-visible scrollbar as a swipe affordance */
+    scrollbar-width: thin;
+    scrollbar-color: var(--rule-strong) transparent;
+  }
+  .chip { flex-shrink: 0; }
 
   .section-table {
     grid-template-columns:
-      minmax(160px, 1.6fr)
+      minmax(150px, 1.6fr)
       minmax(80px, 0.9fr)
-      repeat(6, minmax(44px, 1fr))
+      repeat(6, minmax(46px, 1fr))
       minmax(60px, 0.9fr);
     font-size: 0.85rem;
   }
@@ -1435,11 +1490,28 @@ a:hover { border-bottom-color: var(--ink); }
 
 @media (max-width: 520px) {
   .section-table {
+    /* ref column hidden — keep indicator + 6 years + sparkline */
     grid-template-columns:
-      minmax(120px, 1.4fr)
-      repeat(6, minmax(36px, 1fr))
-      minmax(48px, 0.8fr);
+      minmax(130px, 1.4fr)
+      repeat(6, minmax(46px, 1fr))
+      minmax(52px, 0.7fr);
   }
   .cell-ref { display: none !important; }
   .section-headrow .head-ref { display: none; }
+  .cell-year { font-size: 0.76rem; padding: 0.45rem 0.35rem !important; }
+  .cell-indicator { padding: 0.55rem 0.6rem !important; }
+}
+
+@media (max-width: 380px) {
+  /* On very narrow phones (iPhone SE 1st gen, etc.) drop the sparkline
+     entirely — the trend chart in the detail panel covers the same job. */
+  .section-table {
+    grid-template-columns:
+      minmax(118px, 1.3fr)
+      repeat(6, minmax(42px, 1fr));
+  }
+  .cell-year { font-size: 0.72rem; padding: 0.4rem 0.3rem !important; }
+  .cell-indicator .primary { font-size: 0.82rem; }
+  .cell-spark,
+  .section-headrow .head-spark { display: none !important; }
 }
