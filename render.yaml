@@ -1,0 +1,40 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Default profile: free tier, stateless.
+# The DB is rebuilt from seed_data.py at every build, so user edits made
+# through the Settings page survive container restarts but are wiped on
+# every redeploy.
+#
+# For persistent edits across deploys, uncomment the `disk` block and
+# switch `plan` to `starter` (paid). Then re-deploy: the bundled DB
+# from build time will be copied to the disk on first boot.
+
+services:
+  - type: web
+    name: ydocter
+    runtime: python
+    plan: free
+    region: singapore        # closest to KR; change if you prefer
+    pythonVersion: "3.12"
+
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+      python -m app.load_data
+
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
+    healthCheckPath: /health
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      # Uncomment if you enable the disk block below.
+      # - key: YDOCTER_DB_PATH
+      #   value: /var/data/health.db
+
+    # ---- optional persistent disk (paid, ~$1/mo for 1GB) ----
+    # disk:
+    #   name: ydocter-data
+    #   mountPath: /var/data
+    #   sizeGB: 1

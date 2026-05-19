@@ -1,13 +1,14 @@
 """SQLite connection helpers."""
 from __future__ import annotations
 
+import os
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
 ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = ROOT / "data" / "health.db"
+DB_PATH = Path(os.environ.get("YDOCTER_DB_PATH", ROOT / "data" / "health.db"))
 SCHEMA_PATH = ROOT / "sql" / "schema.sql"
 
 
