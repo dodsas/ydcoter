@@ -2,6 +2,7 @@
 
 Usage:
     python -m app.load_data        # idempotent: drops and reloads seed data
+    python -m app.load_data --keep # only ensures schema; leaves data alone
 """
 from __future__ import annotations
 
@@ -10,7 +11,7 @@ import sys
 from typing import Optional, Tuple
 
 from app.database import connect, init_schema
-from app.seed_data import RECORDS
+from app.seed_data import PROFILES, RECORDS
 
 _RANGE_RE = re.compile(r"^\s*\d+(?:\.\d+)?\s*[~\-]\s*\d+(?:\.\d+)?\s*$")
 _NUM_RE = re.compile(r"[+-]?\d+\.\d+|[+-]?\d+")
@@ -53,46 +54,74 @@ def load(reset: bool = True) -> None:
     try:
         if reset:
             conn.executescript(
+                "DROP VIEW  IF EXISTS v_measurements;"
                 "DROP TABLE IF EXISTS measurements;"
                 "DROP TABLE IF EXISTS test_items;"
-                "DROP VIEW  IF EXISTS v_measurements;"
+                "DROP TABLE IF EXISTS profiles;"
             )
         init_schema(conn)
 
+        if not reset:
+            print(f"Schema ensured -> {conn.execute('PRAGMA database_list').fetchone()['file']}")
+            return
+
+        profile_count = 0
         item_count = 0
         measure_count = 0
 
-        for (major, minor, code, name, values,
-             ref_min, ref_max, ref_indicator, related, memo) in RECORDS:
+        for profile in PROFILES:
             cur = conn.execute(
                 """
-                INSERT INTO test_items
-                  (major_category, minor_category, code, name,
-                   ref_min, ref_max, ref_indicator, related_diseases, memo)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO profiles (slug, display_name, note, sort_order)
+                VALUES (?, ?, ?, ?)
                 """,
-                (major, minor, code, name, ref_min, ref_max,
-                 ref_indicator, related, memo),
+                (
+                    profile["slug"],
+                    profile["display_name"],
+                    profile.get("note"),
+                    profile.get("sort_order", 0),
+                ),
             )
-            item_id = cur.lastrowid
-            item_count += 1
+            profile_id = cur.lastrowid
+            profile_count += 1
 
-            for year, raw in values.items():
-                num, text = parse_value(raw)
-                if num is None and text is None:
-                    continue
-                conn.execute(
+            for (major, minor, code, name, values,
+                 ref_min, ref_max, ref_indicator, related, memo) in RECORDS:
+                cur = conn.execute(
                     """
-                    INSERT INTO measurements (item_id, year, value_numeric, value_text)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO test_items
+                      (profile_id, major_category, minor_category, code, name,
+                       ref_min, ref_max, ref_indicator, related_diseases, memo)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (item_id, year, num, text),
+                    (profile_id, major, minor, code, name, ref_min, ref_max,
+                     ref_indicator, related, memo),
                 )
-                measure_count += 1
+                item_id = cur.lastrowid
+                item_count += 1
+
+                if not profile.get("has_data"):
+                    continue
+
+                for year, raw in values.items():
+                    num, text = parse_value(raw)
+                    if num is None and text is None:
+                        continue
+                    conn.execute(
+                        """
+                        INSERT INTO measurements (item_id, year, value_numeric, value_text)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                        (item_id, year, num, text),
+                    )
+                    measure_count += 1
 
         conn.commit()
-        print(f"Loaded {item_count} items / {measure_count} measurements -> "
-              f"{conn.execute('PRAGMA database_list').fetchone()['file']}")
+        path = conn.execute("PRAGMA database_list").fetchone()["file"]
+        print(
+            f"Loaded {profile_count} profiles / {item_count} items / "
+            f"{measure_count} measurements -> {path}"
+        )
     finally:
         conn.close()
 

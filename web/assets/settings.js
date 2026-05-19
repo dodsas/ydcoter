@@ -17,17 +17,25 @@ document.addEventListener("DOMContentLoaded", boot);
 
 async function boot() {
   try {
-    const items = await fetch("/items").then(must);
-    state.items = items;
-
-    renderRail();
-    renderChips();
-    renderTable();
+    await Profile.init({ onChange: reload });
     bindControls();
+    await reload();
   } catch (err) {
     document.getElementById("ledger").innerHTML =
       `<p class="empty-state">Failed to load items — is the server running?<br><code>${escape(String(err))}</code></p>`;
   }
+}
+
+async function reload() {
+  const slug = Profile.current();
+  state.rowState = new Map();
+  state.rowError = new Map();
+  const qs = slug ? `?profile=${encodeURIComponent(slug)}` : "";
+  const items = await fetch(`/items${qs}`).then(must);
+  state.items = items;
+  renderRail();
+  renderChips();
+  renderTable();
 }
 
 function must(r) {

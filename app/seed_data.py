@@ -11,6 +11,26 @@ loader parses them and stores both `value_numeric` and the original text.
 
 YEARS = (2015, 2019, 2021, 2023, 2024, 2025)
 
+# Each profile gets its own copy of every record below. Only profiles
+# flagged `has_data` get measurements inserted; the rest start with an
+# empty year table, ready for data entry.
+PROFILES = [
+    {
+        "slug": "tteoni",
+        "display_name": "떠니",
+        "note": "Primary record owner.",
+        "has_data": True,
+        "sort_order": 1,
+    },
+    {
+        "slug": "jjuni",
+        "display_name": "쭈니",
+        "note": "신규 프로필 — 데이터 입력 전.",
+        "has_data": False,
+        "sort_order": 2,
+    },
+]
+
 RECORDS = [
     # ---------- 기본검사 ----------
     ("기본검사", "기본검사", "신장", "신장",

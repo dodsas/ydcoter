@@ -18,29 +18,42 @@ document.addEventListener("DOMContentLoaded", boot);
 
 async function boot() {
   try {
-    const [items, measurements] = await Promise.all([
-      fetch("/items").then(must),
-      fetch("/measurements").then(must),
-    ]);
-    state.items = items;
-
-    items.forEach((it) => state.byItem.set(it.id, { item: it, points: new Map() }));
-    measurements.forEach((m) => {
-      const entry = state.byItem.get(m.item_id);
-      if (entry) entry.points.set(m.year, m);
-    });
-    state.latestYear = measurements.reduce((a, b) => Math.max(a, b.year), 0) || 2025;
-
-    renderRail();
-    renderHeadlines();
-    renderChips();
-    renderLedger();
+    await Profile.init({ onChange: reload });
     bindControls();
+    await reload();
   } catch (err) {
     console.error(err);
     document.getElementById("ledger").innerHTML =
       `<p class="empty-state">Failed to load data — is the server running?<br><code>${err}</code></p>`;
   }
+}
+
+async function reload() {
+  const slug = Profile.current();
+  state.items = [];
+  state.byItem = new Map();
+  state.activeItemId = null;
+  closeDetail();
+
+  const qs = slug ? `?profile=${encodeURIComponent(slug)}` : "";
+  const [items, measurements] = await Promise.all([
+    fetch(`/items${qs}`).then(must),
+    fetch(`/measurements${qs}`).then(must),
+  ]);
+  state.items = items;
+
+  items.forEach((it) => state.byItem.set(it.id, { item: it, points: new Map() }));
+  measurements.forEach((m) => {
+    const entry = state.byItem.get(m.item_id);
+    if (entry) entry.points.set(m.year, m);
+  });
+  state.latestYear =
+    measurements.reduce((a, b) => Math.max(a, b.year), 0) || 2025;
+
+  renderRail();
+  renderHeadlines();
+  renderChips();
+  renderLedger();
 }
 
 function must(r) {
@@ -49,35 +62,42 @@ function must(r) {
 }
 
 /* -------------------- rail (top metadata) -------------------- */
+function totalMeasurementCount() {
+  return [...state.byItem.values()].reduce((acc, e) => acc + e.points.size, 0);
+}
+
 function renderRail() {
   document.getElementById("rail-items").textContent = String(state.items.length);
-  const measureCount = [...state.byItem.values()].reduce(
-    (acc, e) => acc + e.points.size, 0,
-  );
+  const measureCount = totalMeasurementCount();
   document.getElementById("rail-measurements").textContent = String(measureCount);
-  document.getElementById("rail-latest").textContent = String(state.latestYear);
+  document.getElementById("rail-latest").textContent =
+    measureCount > 0 ? String(state.latestYear) : "—";
 }
 
 /* -------------------- headlines (summary) -------------------- */
 function renderHeadlines() {
+  const totalMeasurements = totalMeasurementCount();
+  const empty = totalMeasurements === 0;
   const y = state.latestYear;
-  const tag = `at ’${String(y).slice(2)}`;
+  const tag = empty ? "no data" : `at ’${String(y).slice(2)}`;
   document.getElementById("headline-high-year").textContent = tag;
   document.getElementById("headline-low-year").textContent  = tag;
   document.getElementById("headline-coverage-year").textContent = tag;
 
   let high = 0, low = 0, coverage = 0;
-  for (const { points } of state.byItem.values()) {
-    const m = points.get(y);
-    if (m) {
-      coverage++;
-      if (m.status === "HIGH") high++;
-      else if (m.status === "LOW") low++;
+  if (!empty) {
+    for (const { points } of state.byItem.values()) {
+      const m = points.get(y);
+      if (m) {
+        coverage++;
+        if (m.status === "HIGH") high++;
+        else if (m.status === "LOW") low++;
+      }
     }
   }
-  document.getElementById("count-high").textContent = high;
-  document.getElementById("count-low").textContent  = low;
-  document.getElementById("count-coverage").textContent = coverage;
+  document.getElementById("count-high").textContent = empty ? "—" : high;
+  document.getElementById("count-low").textContent  = empty ? "—" : low;
+  document.getElementById("count-coverage").textContent = empty ? "—" : coverage;
   document.getElementById("count-total").textContent    = state.items.length;
 
   /* watch list: indicators that have been HIGH or LOW in 2+ of the
@@ -119,7 +139,10 @@ function renderHeadlines() {
   });
 
   if (watch.length === 0) {
-    watchEl.innerHTML = `<li style="grid-template-columns:1fr"><span class="name" style="color:var(--ink-mute);">All clear — no recurring anomalies.</span></li>`;
+    const msg = empty
+      ? "No measurements yet — start by editing seed_data.py or via the API."
+      : "All clear — no recurring anomalies.";
+    watchEl.innerHTML = `<li style="grid-template-columns:1fr"><span class="name" style="color:var(--ink-mute);">${msg}</span></li>`;
   }
 }
 

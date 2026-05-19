@@ -20,6 +20,16 @@
         <span class="brand-name">ydocter</span>
         <span class="brand-tag">Health Records</span>
       </div>
+
+      <div class="profile-switch" id="profile-switch" data-open="false">
+        <button class="profile-trigger" id="profile-trigger" aria-haspopup="listbox" aria-expanded="false">
+          <span class="profile-trigger-label">Profile</span>
+          <span class="profile-trigger-name" id="profile-current-name">—</span>
+          <span class="profile-trigger-chevron" aria-hidden="true">▾</span>
+        </button>
+        <ul class="profile-menu" id="profile-menu" role="listbox"></ul>
+      </div>
+
       <div class="rail">
         <span class="rail-cell">
           <span class="rail-label">Items</span>
@@ -111,6 +121,7 @@
   </aside>
   <div class="detail-scrim" id="detail-scrim" aria-hidden="true"></div>
 
+  <script src="/assets/profile.js" defer></script>
   <script src="/assets/app.js" defer></script>
 </body>
 </html>

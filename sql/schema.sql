@@ -3,8 +3,18 @@
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 
+CREATE TABLE IF NOT EXISTS profiles (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug          TEXT    NOT NULL UNIQUE,
+    display_name  TEXT    NOT NULL,
+    note          TEXT,
+    sort_order    INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS test_items (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id        INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     major_category    TEXT    NOT NULL,
     minor_category    TEXT    NOT NULL,
     code              TEXT,
@@ -15,7 +25,7 @@ CREATE TABLE IF NOT EXISTS test_items (
     ref_indicator     TEXT,
     related_diseases  TEXT,
     memo              TEXT,
-    UNIQUE (major_category, minor_category, name)
+    UNIQUE (profile_id, major_category, minor_category, name)
 );
 
 CREATE TABLE IF NOT EXISTS measurements (
@@ -27,15 +37,19 @@ CREATE TABLE IF NOT EXISTS measurements (
     UNIQUE (item_id, year)
 );
 
-CREATE INDEX IF NOT EXISTS idx_items_major  ON test_items(major_category);
-CREATE INDEX IF NOT EXISTS idx_items_minor  ON test_items(minor_category);
-CREATE INDEX IF NOT EXISTS idx_measure_item ON measurements(item_id);
-CREATE INDEX IF NOT EXISTS idx_measure_year ON measurements(year);
+CREATE INDEX IF NOT EXISTS idx_items_profile ON test_items(profile_id);
+CREATE INDEX IF NOT EXISTS idx_items_major   ON test_items(major_category);
+CREATE INDEX IF NOT EXISTS idx_items_minor   ON test_items(minor_category);
+CREATE INDEX IF NOT EXISTS idx_measure_item  ON measurements(item_id);
+CREATE INDEX IF NOT EXISTS idx_measure_year  ON measurements(year);
 
 CREATE VIEW IF NOT EXISTS v_measurements AS
 SELECT
     m.id           AS measurement_id,
     i.id           AS item_id,
+    i.profile_id,
+    p.slug         AS profile_slug,
+    p.display_name AS profile_name,
     i.major_category,
     i.minor_category,
     i.code,
@@ -53,4 +67,5 @@ SELECT
         ELSE 'NORMAL'
     END AS status
 FROM measurements m
-JOIN test_items   i ON i.id = m.item_id;
+JOIN test_items   i ON i.id = m.item_id
+JOIN profiles     p ON p.id = i.profile_id;

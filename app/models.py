@@ -6,8 +6,19 @@ from typing import List, Optional
 from pydantic import BaseModel, model_validator
 
 
+class Profile(BaseModel):
+    id: int
+    slug: str
+    display_name: str
+    note: Optional[str] = None
+    sort_order: int = 0
+    item_count: int = 0
+    measurement_count: int = 0
+
+
 class TestItem(BaseModel):
     id: int
+    profile_id: int
     major_category: str
     minor_category: str
     code: Optional[str] = None
@@ -23,6 +34,8 @@ class TestItem(BaseModel):
 class Measurement(BaseModel):
     measurement_id: int
     item_id: int
+    profile_id: int
+    profile_slug: str
     year: int
     value_numeric: Optional[float] = None
     value_text: Optional[str] = None
