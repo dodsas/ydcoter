@@ -15,21 +15,18 @@ services:
     runtime: python
     plan: free
     region: singapore        # closest to KR; change if you prefer
-    pythonVersion: "3.12"
-
     buildCommand: |
       pip install --upgrade pip
       pip install -r requirements.txt
       python -m app.load_data
-
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
-
     healthCheckPath: /health
-
     envVars:
+      # Python version is read from runtime.txt; this env var is the
+      # canonical way to pin it on Render and overrides runtime.txt.
       - key: PYTHON_VERSION
         value: "3.12"
-      # Uncomment if you enable the disk block below.
+      # Uncomment together with the disk block below for persistent edits.
       # - key: YDOCTER_DB_PATH
       #   value: /var/data/health.db
 
