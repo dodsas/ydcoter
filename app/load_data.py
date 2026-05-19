@@ -17,6 +17,49 @@ _RANGE_RE = re.compile(r"^\s*\d+(?:\.\d+)?\s*[~\-]\s*\d+(?:\.\d+)?\s*$")
 _NUM_RE = re.compile(r"[+-]?\d+\.\d+|[+-]?\d+")
 
 
+_COMPOUND_RE = re.compile(
+    r"\s*([A-Za-z][A-Za-z\- ]*?)\s*[: ]\s*([+-]?\d+(?:\.\d+)?)\s*"
+)
+_KO_TO_EN = (
+    # `약양성` must come first because it contains the substring `양성`.
+    ("약양성", "Weak Positive"),
+    ("양성",   "Positive"),
+    ("음성",   "Negative"),
+    # `정상` (hearing test) is preserved as a Korean clinical term.
+)
+
+
+def normalize_value_text(text: Optional[str]) -> Optional[str]:
+    """Canonicalize qualitative cell text so 음성/Negative variants align.
+
+    - Korean negatives/positives become English.
+    - Compound forms like '음성:0.19', 'Negative 0.16', 'Non-Reactive: 0.11'
+      collapse to a single shape: 'Label (value)'.
+    - Range '0~3' is rewritten with an ASCII hyphen '0-3'.
+    - 정상 is left untouched (specific to the hearing test).
+
+    Idempotent: running it twice yields the same string.
+    """
+    if text is None:
+        return None
+    s = text.strip()
+    if not s:
+        return None
+
+    for ko, en in _KO_TO_EN:
+        s = s.replace(ko, en)
+
+    s = re.sub(r"(\d+)\s*~\s*(\d+)", r"\1-\2", s)
+
+    # Skip if the value already uses the canonical 'Label (value)' shape.
+    if "(" not in s:
+        m = _COMPOUND_RE.fullmatch(s)
+        if m:
+            s = f"{m.group(1).strip()} ({m.group(2)})"
+
+    return s
+
+
 def parse_value(raw: Optional[str]) -> Tuple[Optional[float], Optional[str]]:
     """Return (numeric, text) for a raw cell value.
 
@@ -105,6 +148,7 @@ def load(reset: bool = True) -> None:
 
                 for year, raw in values.items():
                     num, text = parse_value(raw)
+                    text = normalize_value_text(text)
                     if num is None and text is None:
                         continue
                     conn.execute(
