@@ -4,7 +4,7 @@
  * a detail panel with a reference-banded trend chart on click.
  */
 
-const YEARS = [2015, 2019, 2021, 2023, 2024, 2025];
+const ALL_YEARS = [2015, 2019, 2021, 2023, 2024, 2025];
 
 const state = {
   items: [],                // raw list from /items
@@ -12,7 +12,54 @@ const state = {
   latestYear: 2025,         // recomputed after load
   filter: { major: null, search: "" },
   activeItemId: null,
+  layout: null,             // current viewport-dependent layout (see computeLayout)
 };
+
+/* Decide which year columns + auxiliary columns to render based on the
+ * current viewport width. We choose the *latest* N years so the most
+ * relevant readings are always visible. The grid template string is
+ * baked in here so each section-table is laid out with no horizontal
+ * overflow — and therefore no drag. */
+function computeLayout() {
+  const w = document.documentElement.clientWidth;
+  if (w >= 1100) return {
+    years: ALL_YEARS,
+    ref: true, spark: true,
+    cols: "minmax(220px, 2.4fr) minmax(108px, 1fr) repeat(6, minmax(60px, 1fr)) minmax(90px, 1.2fr)",
+  };
+  if (w >= 860) return {
+    years: ALL_YEARS.slice(-5),
+    ref: true, spark: true,
+    cols: "minmax(180px, 2fr) minmax(92px, 0.9fr) repeat(5, minmax(54px, 1fr)) minmax(70px, 1fr)",
+  };
+  if (w >= 680) return {
+    years: ALL_YEARS.slice(-4),
+    ref: true, spark: true,
+    cols: "minmax(150px, 1.7fr) minmax(76px, 0.9fr) repeat(4, minmax(50px, 1fr)) minmax(60px, 0.9fr)",
+  };
+  if (w >= 520) return {
+    years: ALL_YEARS.slice(-3),
+    ref: true, spark: false,
+    cols: "minmax(140px, 1.6fr) minmax(70px, 0.9fr) repeat(3, minmax(54px, 1fr))",
+  };
+  if (w >= 380) return {
+    years: ALL_YEARS.slice(-3),
+    ref: false, spark: false,
+    cols: "minmax(118px, 1.5fr) repeat(3, minmax(52px, 1fr))",
+  };
+  return {
+    years: ALL_YEARS.slice(-2),
+    ref: false, spark: false,
+    cols: "minmax(108px, 1.4fr) repeat(2, minmax(58px, 1fr))",
+  };
+}
+
+function layoutChanged(a, b) {
+  if (!a || !b) return true;
+  return a.years.length !== b.years.length
+      || a.ref !== b.ref
+      || a.spark !== b.spark;
+}
 
 document.addEventListener("DOMContentLoaded", boot);
 
@@ -183,6 +230,7 @@ function renderChips() {
 
 /* -------------------- ledger (big table) -------------------- */
 function renderLedger() {
+  const layout = state.layout || (state.layout = computeLayout());
   const ledger = document.getElementById("ledger");
   ledger.innerHTML = "";
 
@@ -229,15 +277,16 @@ function renderLedger() {
 
     const grid = document.createElement("div");
     grid.className = "section-table";
+    grid.style.gridTemplateColumns = layout.cols;
 
     const headrow = document.createElement("div");
     headrow.className = "section-headrow";
-    headrow.innerHTML = `
-      <div class="head-indicator">Indicator</div>
-      <div class="head-ref">Reference</div>
-      ${YEARS.map((y) => `<div>’${String(y).slice(2)}</div>`).join("")}
-      <div class="head-spark">Trend</div>
-    `;
+    headrow.innerHTML = [
+      `<div class="head-indicator">Indicator</div>`,
+      layout.ref   ? `<div class="head-ref">Reference</div>` : "",
+      ...layout.years.map((y) => `<div>’${String(y).slice(2)}</div>`),
+      layout.spark ? `<div class="head-spark">Trend</div>` : "",
+    ].filter(Boolean).join("");
     grid.appendChild(headrow);
 
     list.forEach((it) => {
@@ -247,27 +296,25 @@ function renderLedger() {
       if (state.activeItemId === it.id) row.classList.add("is-active");
 
       const entry = state.byItem.get(it.id);
-      const cells = YEARS.map((y) => {
+      const yearCells = layout.years.map((y) => {
         const m = entry.points.get(y);
-        if (!m) {
-          return `<div class="cell-year empty">—</div>`;
-        }
+        if (!m) return `<div class="cell-year empty">—</div>`;
         const v = m.value_text ?? (m.value_numeric != null ? formatNum(m.value_numeric) : "—");
         return `<div class="cell-year" data-status="${m.status ?? ""}">${escape(v)}</div>`;
       }).join("");
 
-      row.innerHTML = `
-        <div class="cell-indicator">
-          <span class="primary">${escape(it.name)}</span>
-          <span class="secondary">${escape(it.code || "")}${
-            it.minor_category && it.minor_category !== major
-              ? ` · ${escape(it.minor_category)}` : ""
-          }</span>
-        </div>
-        <div class="cell-ref">${formatRef(it)}</div>
-        ${cells}
-        <div class="cell-spark">${sparkline(entry, it)}</div>
-      `;
+      row.innerHTML = [
+        `<div class="cell-indicator">
+           <span class="primary">${escape(it.name)}</span>
+           <span class="secondary">${escape(it.code || "")}${
+             it.minor_category && it.minor_category !== major
+               ? ` · ${escape(it.minor_category)}` : ""
+           }</span>
+         </div>`,
+        layout.ref   ? `<div class="cell-ref">${formatRef(it)}</div>` : "",
+        yearCells,
+        layout.spark ? `<div class="cell-spark">${sparkline(entry, it)}</div>` : "",
+      ].filter(Boolean).join("");
 
       row.addEventListener("click", () => openDetail(it.id));
       [...row.children].forEach((c) => c.addEventListener("click", (e) => {
@@ -309,7 +356,7 @@ function escape(s) {
 
 /* -------------------- sparklines (per-row tufte) -------------------- */
 function sparkline(entry, item) {
-  const numeric = YEARS
+  const numeric = ALL_YEARS
     .map((y) => {
       const m = entry.points.get(y);
       return m && m.value_numeric != null
@@ -329,7 +376,7 @@ function sparkline(entry, item) {
   if (item.ref_max != null) hi = Math.max(hi, item.ref_max);
   if (hi === lo) { hi = lo + 1; lo = lo - 1; }
 
-  const x = (year) => P + (YEARS.indexOf(year) / (YEARS.length - 1)) * (W - 2 * P);
+  const x = (year) => P + (ALL_YEARS.indexOf(year) / (ALL_YEARS.length - 1)) * (W - 2 * P);
   const y = (v)    => H - P - ((v - lo) / (hi - lo)) * (H - 2 * P);
 
   let band = "";
@@ -484,8 +531,8 @@ function detailChart(item, sorted) {
   const W = 460, H = 240;
   const padL = 40, padR = 16, padT = 22, padB = 28;
 
-  const xMin = Math.min(...YEARS);
-  const xMax = Math.max(...YEARS);
+  const xMin = Math.min(...ALL_YEARS);
+  const xMax = Math.max(...ALL_YEARS);
 
   let yMin = Math.min(...numeric.map((p) => p.value_numeric));
   let yMax = Math.max(...numeric.map((p) => p.value_numeric));
@@ -533,7 +580,7 @@ function detailChart(item, sorted) {
   }
 
   /* x ticks */
-  const xTicks = YEARS.map((yr) => {
+  const xTicks = ALL_YEARS.map((yr) => {
     const x = sx(yr);
     return `
       <line x1="${x.toFixed(1)}" y1="${(H-padB).toFixed(1)}" x2="${x.toFixed(1)}" y2="${(H-padB+3).toFixed(1)}" stroke="#44423E" stroke-width="0.5"/>
@@ -593,5 +640,19 @@ function bindControls() {
       e.preventDefault();
       search.focus();
     }
+  });
+
+  /* Recompute layout (year columns + aux columns) when the viewport
+     changes. Only re-render when the shape actually changes. */
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      const next = computeLayout();
+      if (layoutChanged(state.layout, next)) {
+        state.layout = next;
+        renderLedger();
+      }
+    }, 120);
   });
 }
