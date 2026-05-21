@@ -15,7 +15,15 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
-from app.database import DB_PATH, TURSO_URL, connect, get_conn, init_schema, using_turso
+from app.database import (
+    DB_PATH,
+    TURSO_URL,
+    connect,
+    get_conn,
+    get_local_conn,
+    init_schema,
+    using_turso,
+)
 from app.models import (
     DailyNutrition,
     Measurement,
@@ -70,25 +78,33 @@ def _ensure_schema() -> None:
 # ===========================================================================
 
 
-def _resolve_profile_id(conn, slug: Optional[str]) -> int:
-    """Return the row id for the given slug, or fall back to the first profile.
+def _resolve_profile(conn, slug: Optional[str]) -> tuple[int, str]:
+    """Return ``(id, slug)`` for the given slug, or fall back to the first profile.
+
+    Returning both fields lets callers skip a follow-up ``SELECT slug ...``
+    round-trip when they need the slug for the response payload.
 
     Raises 404 if the requested slug doesn't exist, or 400 if no profiles
     exist at all.
     """
     if slug:
         row = conn.execute(
-            "SELECT id FROM profiles WHERE slug = ?", (slug,)
+            "SELECT id, slug FROM profiles WHERE slug = ?", (slug,)
         ).fetchone()
         if not row:
             raise HTTPException(404, f"profile '{slug}' not found")
-        return row["id"]
+        return row["id"], row["slug"]
     row = conn.execute(
-        "SELECT id FROM profiles ORDER BY sort_order, id LIMIT 1"
+        "SELECT id, slug FROM profiles ORDER BY sort_order, id LIMIT 1"
     ).fetchone()
     if not row:
         raise HTTPException(400, "no profiles defined — run `python -m app.load_data`")
-    return row["id"]
+    return row["id"], row["slug"]
+
+
+def _resolve_profile_id(conn, slug: Optional[str]) -> int:
+    """Backwards-compatible wrapper for callers that only need the id."""
+    return _resolve_profile(conn, slug)[0]
 
 
 # ===========================================================================
@@ -98,7 +114,7 @@ def _resolve_profile_id(conn, slug: Optional[str]) -> int:
 
 @app.get("/health")
 def healthcheck() -> dict:
-    with get_conn() as conn:
+    with get_local_conn() as conn:
         items = conn.execute("SELECT COUNT(*) AS n FROM test_items").fetchone()["n"]
         measures = conn.execute("SELECT COUNT(*) AS n FROM measurements").fetchone()["n"]
         profiles = conn.execute("SELECT COUNT(*) AS n FROM profiles").fetchone()["n"]
@@ -107,24 +123,28 @@ def healthcheck() -> dict:
         "profiles": profiles,
         "items": items,
         "measurements": measures,
-        "backend": "turso" if using_turso() else "sqlite",
-        "db": TURSO_URL if using_turso() else str(DB_PATH),
+        "health_backend": "sqlite",
+        "health_db": str(DB_PATH),
+        "nutrition_backend": "turso" if using_turso() else "sqlite",
+        "nutrition_db": TURSO_URL if using_turso() else str(DB_PATH),
     }
 
 
 @app.get("/profiles", response_model=List[Profile])
 def list_profiles() -> List[Profile]:
-    with get_conn() as conn:
+    with get_local_conn() as conn:
         rows = conn.execute(
             """
             SELECT
                 p.id, p.slug, p.display_name, p.note, p.sort_order,
                 p.sex, p.birth_year, p.height_cm,
-                (SELECT COUNT(*) FROM test_items i WHERE i.profile_id = p.id) AS item_count,
-                (SELECT COUNT(*) FROM measurements m
-                   JOIN test_items i ON i.id = m.item_id
-                   WHERE i.profile_id = p.id) AS measurement_count
+                COUNT(DISTINCT i.id) AS item_count,
+                COUNT(m.id)          AS measurement_count
             FROM profiles p
+            LEFT JOIN test_items   i ON i.profile_id = p.id
+            LEFT JOIN measurements m ON m.item_id    = i.id
+            GROUP BY p.id, p.slug, p.display_name, p.note, p.sort_order,
+                     p.sex, p.birth_year, p.height_cm
             ORDER BY p.sort_order, p.id
             """
         ).fetchall()
@@ -138,7 +158,7 @@ def list_profiles() -> List[Profile]:
 
 @app.get("/categories")
 def categories(profile: Optional[str] = Query(None)) -> List[dict]:
-    with get_conn() as conn:
+    with get_local_conn() as conn:
         pid = _resolve_profile_id(conn, profile)
         rows = conn.execute(
             """
@@ -160,7 +180,7 @@ def list_items(
     minor: Optional[str] = Query(None, description="소분류 필터"),
     q: Optional[str] = Query(None, description="이름/코드 부분 검색"),
 ) -> List[TestItem]:
-    with get_conn() as conn:
+    with get_local_conn() as conn:
         pid = _resolve_profile_id(conn, profile)
         sql = "SELECT * FROM test_items WHERE profile_id = ?"
         params: list = [pid]
@@ -181,7 +201,7 @@ def list_items(
 
 @app.get("/items/{item_id}", response_model=TestItem)
 def get_item(item_id: int) -> TestItem:
-    with get_conn() as conn:
+    with get_local_conn() as conn:
         row = conn.execute(
             "SELECT * FROM test_items WHERE id = ?", (item_id,)
         ).fetchone()
@@ -192,7 +212,7 @@ def get_item(item_id: int) -> TestItem:
 
 @app.get("/items/{item_id}/trend", response_model=Trend)
 def item_trend(item_id: int) -> Trend:
-    with get_conn() as conn:
+    with get_local_conn() as conn:
         item_row = conn.execute(
             "SELECT * FROM test_items WHERE id = ?", (item_id,)
         ).fetchone()
@@ -221,7 +241,7 @@ def list_measurements(
     major: Optional[str] = Query(None),
     minor: Optional[str] = Query(None),
 ) -> List[Measurement]:
-    with get_conn() as conn:
+    with get_local_conn() as conn:
         pid = _resolve_profile_id(conn, profile)
         sql = "SELECT * FROM v_measurements WHERE profile_id = ?"
         params: list = [pid]
@@ -247,7 +267,7 @@ def abnormal_for_year(
     year: int,
     profile: Optional[str] = Query(None),
 ) -> List[Measurement]:
-    with get_conn() as conn:
+    with get_local_conn() as conn:
         pid = _resolve_profile_id(conn, profile)
         rows = conn.execute(
             """
@@ -268,29 +288,26 @@ def abnormal_for_year(
 @app.get("/nutrition/dates", response_model=List[NutritionDateSummary])
 def nutrition_dates(profile: Optional[str] = Query(None)) -> List[NutritionDateSummary]:
     """List every date that has at least one logged food entry, newest first."""
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
     with get_conn() as conn:
-        pid = _resolve_profile_id(conn, profile)
         rows = conn.execute(
             """
             SELECT
                 l.log_date,
                 COUNT(DISTINCT l.id) AS entry_count,
-                (
-                    SELECT COALESCE(SUM(v2.amount), 0)
-                    FROM nutrition_values v2
-                    JOIN nutrients n2 ON n2.id = v2.nutrient_id
-                    WHERE n2.code = 'kcal'
-                      AND v2.log_id IN (
-                          SELECT id FROM nutrition_logs
-                          WHERE profile_id = ? AND log_date = l.log_date
-                      )
+                COALESCE(
+                    SUM(CASE WHEN n.code = 'kcal' THEN v.amount END),
+                    0
                 ) AS kcal
             FROM nutrition_logs l
+            LEFT JOIN nutrition_values v ON v.log_id = l.id
+            LEFT JOIN nutrients n        ON n.id = v.nutrient_id
             WHERE l.profile_id = ?
             GROUP BY l.log_date
             ORDER BY l.log_date DESC
             """,
-            (pid, pid),
+            (pid,),
         ).fetchall()
     return [
         NutritionDateSummary(
@@ -308,14 +325,16 @@ def nutrition_for_day(
     profile: Optional[str] = Query(None),
 ) -> DailyNutrition:
     """Return all food entries + computed nutrient totals for a single day."""
+    with get_local_conn() as lconn:
+        pid, slug = _resolve_profile(lconn, profile)
     with get_conn() as conn:
-        pid = _resolve_profile_id(conn, profile)
-        return _load_daily_nutrition(conn, pid, log_date, require_data=True)
+        return _load_daily_nutrition(conn, pid, slug, log_date, require_data=True)
 
 
 def _load_daily_nutrition(
     conn,
     profile_id: int,
+    profile_slug: str,
     log_date: str,
     *,
     require_data: bool = False,
@@ -324,11 +343,9 @@ def _load_daily_nutrition(
 
     ``require_data=True`` raises 404 when no entries exist; the parse
     endpoint passes False so it can return the freshly-inserted day.
+    Callers pass ``profile_slug`` so this function can skip an extra
+    round-trip just to resolve the slug from the id.
     """
-    profile_slug = conn.execute(
-        "SELECT slug FROM profiles WHERE id = ?", (profile_id,)
-    ).fetchone()["slug"]
-
     log_rows = conn.execute(
         """
         SELECT id, profile_id, log_date, meal_type, food_name, serving,
@@ -347,24 +364,46 @@ def _load_daily_nutrition(
         """
         SELECT v.log_id, n.code, v.amount
         FROM nutrition_values v
-        JOIN nutrients        n ON n.id = v.nutrient_id
-        WHERE v.log_id IN (
-            SELECT id FROM nutrition_logs
-            WHERE profile_id = ? AND log_date = ?
-        )
+        JOIN nutrients      n ON n.id = v.nutrient_id
+        JOIN nutrition_logs l ON l.id = v.log_id
+        WHERE l.profile_id = ? AND l.log_date = ?
         """,
         (profile_id, log_date),
     ).fetchall()
 
+    # Drive from the full nutrients catalog so every tracked nutrient shows
+    # up — even ones the user hasn't logged today. Missing rows surface as
+    # total=0, which lets the frontend render the row and its "권장 식품"
+    # hint instead of silently omitting it. v_daily_nutrition is INNER-
+    # JOINed to nutrition_values, so it can't tell us about un-logged
+    # nutrients on its own.
     totals_rows = conn.execute(
         """
-        SELECT nutrient_id, nutrient_code AS code, name_ko, name_en,
-               unit, category, rda, ul, excess_warning, sort_order, total
-        FROM v_daily_nutrition
-        WHERE profile_id = ? AND log_date = ?
-        ORDER BY sort_order
+        SELECT
+            n.id                       AS nutrient_id,
+            n.code                     AS code,
+            n.name_ko,
+            n.name_en,
+            n.unit,
+            n.category,
+            COALESCE(po.rda, n.rda)    AS rda,
+            COALESCE(po.ul,  n.ul)     AS ul,
+            n.excess_warning,
+            n.sort_order,
+            COALESCE(daily.total, 0)   AS total
+        FROM nutrients n
+        LEFT JOIN profile_nutrient_rda po
+            ON po.profile_id = ? AND po.nutrient_id = n.id
+        LEFT JOIN (
+            SELECT v.nutrient_id, SUM(v.amount) AS total
+            FROM nutrition_values v
+            JOIN nutrition_logs   l ON l.id = v.log_id
+            WHERE l.profile_id = ? AND l.log_date = ?
+            GROUP BY v.nutrient_id
+        ) daily ON daily.nutrient_id = n.id
+        ORDER BY n.sort_order
         """,
-        (profile_id, log_date),
+        (profile_id, profile_id, log_date),
     ).fetchall()
 
     values_by_log: dict[int, dict[str, float]] = {}
@@ -416,9 +455,10 @@ def nutrition_parse(
             "yclaude is not configured — set YCLAUDE_BASE_URL and YCLAUDE_API_KEY",
         )
 
-    with get_conn() as conn:
-        pid = _resolve_profile_id(conn, profile)
+    with get_local_conn() as lconn:
+        pid, slug = _resolve_profile(lconn, profile)
 
+    with get_conn() as conn:
         catalog = [
             dict(r)
             for r in conn.execute(
@@ -497,7 +537,7 @@ def nutrition_parse(
             inserted += 1
 
         conn.commit()
-        day = _load_daily_nutrition(conn, pid, log_date)
+        day = _load_daily_nutrition(conn, pid, slug, log_date)
 
     return NutritionParseResponse(
         inserted=inserted,
@@ -539,7 +579,7 @@ def update_reference(item_id: int, body: ReferenceUpdate) -> TestItem:
     `null` for a field clears that bound.
     """
     sent = body.model_fields_set
-    with get_conn() as conn:
+    with get_local_conn() as conn:
         existing = conn.execute(
             "SELECT * FROM test_items WHERE id = ?", (item_id,)
         ).fetchone()

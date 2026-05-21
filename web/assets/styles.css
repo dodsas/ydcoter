@@ -1821,14 +1821,20 @@ a:hover { border-bottom-color: var(--ink); }
   transform: translateX(-50%);
 }
 
+/* UL marker — small downward-pointing notch above the track. Different
+ * shape from .bar-rda so the two read as distinct even when their x
+ * positions overlap (e.g. magnesium, where UL≈RDA). */
 .bar-ul {
   position: absolute;
-  top: -3px;
-  bottom: -3px;
-  width: 1.5px;
-  background: var(--ul);
+  top: -6px;
+  width: 0;
+  height: 0;
+  background: transparent;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--ul);
   transform: translateX(-50%);
-  border-radius: 1px;
+  pointer-events: auto;
 }
 
 .bar-legend {
@@ -2467,6 +2473,45 @@ a:hover { border-bottom-color: var(--ink); }
 }
 
 .warning-text {
+  flex: 1;
+  min-width: 0;
+  word-break: keep-all;
+}
+
+.nutri-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin-top: 0.45rem;
+  padding: 0.4rem 0.55rem 0.4rem 0.5rem;
+  background: var(--low-bg);
+  border-left: 2px solid var(--low);
+  border-radius: 0 2px 2px 0;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: var(--low);
+  letter-spacing: 0.01em;
+}
+
+.hint-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-top: 0.05rem;
+  background: var(--low);
+  color: #FFFFFF;
+  border-radius: 50%;
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 0.66rem;
+  line-height: 1;
+}
+
+.hint-text {
   flex: 1;
   min-width: 0;
   word-break: keep-all;

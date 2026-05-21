@@ -54,12 +54,8 @@ async function reload() {
   const slug = Profile.current();
   const qs = slug ? `?profile=${encodeURIComponent(slug)}` : "";
 
-  const [dates, profiles] = await Promise.all([
-    fetch(`/nutrition/dates${qs}`).then(must),
-    fetch(`/profiles`).then(must),
-  ]);
-  state.dates = dates;
-  state.profiles = profiles;
+  state.dates = await fetch(`/nutrition/dates${qs}`).then(must);
+  state.profiles = Profile.list();
 
   state.byDate = new Map();
   state.dates.forEach((d) => state.byDate.set(d.log_date, d));
@@ -544,6 +540,24 @@ function renderNutrientRow(t) {
        </div>`
     : "";
 
+  /* For beneficial nutrients still under RDA, surface a short list of
+   * representative Korean foods so the user knows what to add. We only
+   * show on truly-deficient rows (status === "neutral", which for these
+   * nutrients implies < 90% RDA) and skip limit/neutral codes whose
+   * "more" recommendation isn't healthful. */
+  const showHint =
+    status === "neutral" &&
+    !LIMIT_NUTRIENTS.has(t.code) &&
+    !NEUTRAL_NUTRIENTS.has(t.code) &&
+    t.rda != null &&
+    FOOD_SOURCES[t.code];
+  const hint = showHint
+    ? `<div class="nutri-hint" role="note">
+         <span class="hint-glyph" aria-hidden="true">+</span>
+         <span class="hint-text">권장 식품: ${FOOD_SOURCES[t.code].map(escape).join(", ")}</span>
+       </div>`
+    : "";
+
   return `
     <div class="nutri-row" data-status="${status}">
       <div class="nutri-row-head">
@@ -560,7 +574,7 @@ function renderNutrientRow(t) {
         <div class="bar-track">
           <div class="bar-fill" style="width:${fillPercent.toFixed(1)}%"></div>
           <div class="bar-rda" title="RDA"></div>
-          ${t.ul != null && t.rda ? `<div class="bar-ul" style="left:${Math.min((t.ul / t.rda / 2) * 100, 100).toFixed(1)}%" title="UL"></div>` : ""}
+          ${t.ul != null && t.rda && t.ul <= t.rda * 2 ? `<div class="bar-ul" style="left:${((t.ul / t.rda / 2) * 100).toFixed(1)}%" title="UL"></div>` : ""}
         </div>
         <div class="bar-legend">
           <span class="legend-pct ${pct == null ? "muted" : ""}">${pct == null ? "—" : Math.round(pct) + "%"}</span>
@@ -568,6 +582,7 @@ function renderNutrientRow(t) {
         </div>
       </div>
       ${warning}
+      ${hint}
     </div>
   `;
 }
@@ -597,6 +612,40 @@ const LIMIT_NUTRIENTS = new Set([
 const NEUTRAL_NUTRIENTS = new Set([
   "kcal", "carb", "fat", "omega6",
 ]);
+
+/* Representative Korean foods per nutrient. Surfaced as a hint under any
+ * "good" nutrient that hasn't met its RDA, so the user can act on the gap.
+ * Kept in JS because the catalog is static reference data (no per-user or
+ * per-day variance) and lives close to the rendering code. */
+const FOOD_SOURCES = {
+  protein: ["닭가슴살", "계란", "두부", "콩", "생선", "그릭요거트"],
+  fiber:   ["현미·잡곡밥", "검은콩", "양배추", "사과", "배", "김치", "미역"],
+  ca:      ["우유", "치즈", "요거트", "멸치", "두부", "시금치", "깨"],
+  p:       ["견과류", "콩", "생선", "유제품", "통곡물"],
+  fe:      ["붉은살 소고기", "굴", "시금치", "검은콩", "검은깨", "간"],
+  mg:      ["아몬드", "시금치", "검은콩", "현미", "다크초콜릿"],
+  zn:      ["굴", "소고기", "호박씨", "캐슈넛", "병아리콩"],
+  cu:      ["굴", "간", "견과류", "코코아", "버섯"],
+  mn:      ["통곡물", "견과류", "녹차", "시금치", "파인애플"],
+  k:       ["바나나", "감자", "고구마", "시금치", "토마토", "아보카도"],
+  se:      ["브라질너트", "참치", "정어리", "달걀"],
+  iodine:  ["김", "다시마", "미역", "유제품", "달걀"],
+  vit_a:   ["당근", "단호박", "시금치", "김", "달걀노른자", "닭·소간"],
+  vit_c:   ["딸기", "키위", "오렌지", "파프리카", "브로콜리", "토마토"],
+  vit_d:   ["연어", "고등어", "정어리", "달걀노른자", "햇볕 쬔 표고버섯"],
+  vit_e:   ["아몬드", "해바라기씨", "올리브유", "시금치", "아보카도"],
+  vit_k:   ["시금치", "케일", "브로콜리", "낫토", "양배추"],
+  b1:      ["돼지고기", "현미", "콩", "견과류"],
+  b2:      ["우유", "계란", "시금치", "아몬드", "버섯"],
+  b3:      ["닭가슴살", "참치·고등어", "땅콩", "표고버섯"],
+  b5:      ["닭고기", "달걀", "버섯", "아보카도", "고구마"],
+  b6:      ["연어", "닭고기", "감자", "바나나"],
+  folate:  ["시금치", "아스파라거스", "콩류", "오렌지", "아보카도"],
+  b12:     ["조개·굴", "소고기", "연어·고등어", "달걀", "우유"],
+  biotin:  ["달걀노른자", "견과류", "통곡물", "연어", "고구마"],
+  choline: ["달걀", "소고기", "닭간", "연어", "콜리플라워"],
+  omega3:  ["연어", "고등어", "정어리", "들기름", "호두", "아마씨"],
+};
 
 function classify(t) {
   if (t.total == null) return "none";

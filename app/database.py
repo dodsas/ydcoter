@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator, Sequence
@@ -123,7 +124,11 @@ class _Connection:
         self._conn = native_conn
 
     def execute(self, sql: str, params: Sequence[Any] = ()) -> _Cursor:
-        return _Cursor(self._conn.execute(sql, params))
+        # libsql_experimental requires a tuple — it rejects list / other
+        # sequences with `TypeError: argument 'parameters': 'list' object
+        # cannot be converted to 'PyTuple'`. sqlite3 accepts either, so a
+        # blanket coercion here keeps callers free to use either.
+        return _Cursor(self._conn.execute(sql, tuple(params)))
 
     def executescript(self, script: str):
         return self._conn.executescript(script)
@@ -159,11 +164,21 @@ def connect():
         native = libsql.connect(TURSO_URL, auth_token=TURSO_TOKEN)
         return _Connection(native)
 
+    return _connect_local()
+
+
+def _connect_local():
+    """Always return a connection to the local SQLite file.
+
+    Used by :func:`get_local_conn` for tables (profiles, test_items,
+    measurements) that are committed to git and shouldn't round-trip to
+    Turso. Independent of ``TURSO_DATABASE_URL`` so the dashboard works
+    even with Turso configured.
+    """
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    # Local-only PRAGMAs. WAL improves concurrent read/write on the
-    # bundled file DB. Turso uses its own storage so these are skipped.
+    # WAL improves concurrent read/write on the file DB.
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
@@ -204,10 +219,92 @@ def _split_sql(script: str) -> list[str]:
     return out
 
 
+# ---------------------------------------------------------------------------
+# Thread-local connection cache
+#
+# FastAPI runs sync routes on a threadpool — opening a fresh libsql/sqlite
+# connection per request costs a TCP/TLS handshake on the Turso path
+# (~hundreds of ms to AWS Tokyo). Stashing one connection per worker
+# thread keeps the handshake cost paid once. Connections are dropped only
+# on suspected backend failures so a transient blip can re-establish
+# cleanly; HTTPException and other application-level errors keep the
+# cached connection alive.
+# ---------------------------------------------------------------------------
+
+_LOCAL = threading.local()
+
+_RECOVERABLE_ERRORS: tuple[type[BaseException], ...] = (
+    sqlite3.OperationalError,
+    sqlite3.DatabaseError,
+    sqlite3.InterfaceError,
+    OSError,
+)
+
+
+def _get_cached_conn():
+    conn = getattr(_LOCAL, "conn", None)
+    if conn is None:
+        conn = connect()
+        _LOCAL.conn = conn
+    return conn
+
+
+def _drop_cached_conn() -> None:
+    conn = getattr(_LOCAL, "conn", None)
+    if conn is None:
+        return
+    _LOCAL.conn = None
+    try:
+        conn.close()
+    except Exception:
+        pass
+
+
 @contextmanager
 def get_conn() -> Iterator:
-    conn = connect()
+    conn = _get_cached_conn()
     try:
         yield conn
-    finally:
+    except _RECOVERABLE_ERRORS:
+        _drop_cached_conn()
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Local-only connection cache
+#
+# A separate thread-local slot for the always-local SQLite handle. Health
+# checkup data (profiles / test_items / measurements) is committed to git
+# and read from this connection regardless of whether Turso is configured.
+# ---------------------------------------------------------------------------
+
+_LOCAL_DB = threading.local()
+
+
+def _get_cached_local_conn():
+    conn = getattr(_LOCAL_DB, "conn", None)
+    if conn is None:
+        conn = _connect_local()
+        _LOCAL_DB.conn = conn
+    return conn
+
+
+def _drop_cached_local_conn() -> None:
+    conn = getattr(_LOCAL_DB, "conn", None)
+    if conn is None:
+        return
+    _LOCAL_DB.conn = None
+    try:
         conn.close()
+    except Exception:
+        pass
+
+
+@contextmanager
+def get_local_conn() -> Iterator:
+    conn = _get_cached_local_conn()
+    try:
+        yield conn
+    except _RECOVERABLE_ERRORS:
+        _drop_cached_local_conn()
+        raise
