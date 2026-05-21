@@ -10,7 +10,10 @@ venv/
 !.env.example
 
 # SQLite (local DB files)
+# health.db ships seed data (profiles/test_items/measurements) to Render —
+# the app reads it through get_local_conn(), so it must be in git.
 data/*.db
+!data/health.db
 data/*.db-journal
 data/*.db-wal
 data/*.db-shm

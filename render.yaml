@@ -2,13 +2,15 @@
 #
 # Persistence model
 # -----------------
-# Render free tier has an ephemeral filesystem. To survive deploys, set
-# `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` in the Render dashboard. When
-# those are set the app talks to Turso instead of the local SQLite file,
-# and `python -m app.load_data` only seeds when Turso is empty.
+# Health checkup data (profiles/test_items/measurements) ships as
+# `data/health.db` in git — the app reads it through get_local_conn(),
+# so it's available immediately on every deploy. PATCH edits to that DB
+# only persist across deploys if you commit the updated file.
 #
-# Without Turso the app still works but every deploy wipes user data
-# (calling `--reset` would do the same on purpose — for local clean state).
+# Nutrition data (logs/values) lives in Turso when configured. Set
+# `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` in the Render dashboard to
+# survive deploys; otherwise the local SQLite copy is used and Render's
+# ephemeral filesystem will wipe it on each redeploy.
 
 services:
   - type: web
@@ -17,7 +19,6 @@ services:
     plan: free
     region: singapore        # closest to KR; change if you prefer
     buildCommand: |
-      pip install --upgrade pip
       pip install -r requirements.txt
       python -m app.load_data
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
