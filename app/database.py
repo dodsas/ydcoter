@@ -123,7 +123,9 @@ class _Connection:
         self._conn = native_conn
 
     def execute(self, sql: str, params: Sequence[Any] = ()) -> _Cursor:
-        return _Cursor(self._conn.execute(sql, params))
+        # libsql_experimental only accepts a tuple for parameters; sqlite3
+        # tolerates lists, so callers commonly build a list to append to.
+        return _Cursor(self._conn.execute(sql, tuple(params)))
 
     def executescript(self, script: str):
         return self._conn.executescript(script)
