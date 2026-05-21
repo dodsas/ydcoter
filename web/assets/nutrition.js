@@ -537,6 +537,13 @@ function renderNutrientRow(t) {
   /* RDA marker is always at 100% — fill is scaled so 100% = halfway across (visual cap at 200%). */
   const fillPercent = (fillWidth / 200) * 100;
 
+  const warning = status === "bad" && t.excess_warning
+    ? `<div class="nutri-warning" role="note">
+         <span class="warning-glyph" aria-hidden="true">!</span>
+         <span class="warning-text">초과 시: ${escape(t.excess_warning)}</span>
+       </div>`
+    : "";
+
   return `
     <div class="nutri-row" data-status="${status}">
       <div class="nutri-row-head">
@@ -560,24 +567,54 @@ function renderNutrientRow(t) {
           <span class="legend-rda">RDA ${t.rda != null ? formatAmount(t.rda, t.unit) : "—"}${t.ul != null ? ` · UL ${formatAmount(t.ul, t.unit)}` : ""}</span>
         </div>
       </div>
+      ${warning}
     </div>
   `;
 }
 
-/* Map a nutrient total to a status label that controls coloring.
- *  - sodium has a "lower is better" cap → over is bad
- *  - macros (kcal, carb, fat, protein, fiber): only flag low/over by RDA proximity
- *  - micros: flag UL exceedance as the worst, then over/normal/under
+/* Classify a nutrient row into one of three health states.
+ *
+ *   good     — green: nutrient is in a healthy range
+ *              · "limit" nutrients (sodium, sat fat, etc.) under target
+ *              · "good" nutrients meeting RDA without breaching UL
+ *   bad      — red:   nutrient is in an unhealthy range
+ *              · "limit" nutrients exceeding target
+ *              · "good" nutrients exceeding their UL
+ *   neutral  — blue:  purely informational, no good/bad judgement
+ *              · energy / macros (kcal, carb, fat, omega-6)
+ *              · "good" nutrients still below RDA (not yet a problem,
+ *                but not yet sufficient either)
+ *   none     — gray:  no data
+ *
+ * Rule from user: 좋은것이여도 기준치를 넘었을때 안좋아지면 붉은색.
+ * UL is the formal "you crossed harm threshold". If a nutrient has no UL
+ * (e.g. water-soluble vitamins, fiber, protein, potassium, omega-3),
+ * extra intake stays green per spec — "많이 먹어도 문제 없으면 녹색 유지".
  */
+const LIMIT_NUTRIENTS = new Set([
+  "sodium", "sat_fat", "trans_fat", "chol", "sugar",
+]);
+const NEUTRAL_NUTRIENTS = new Set([
+  "kcal", "carb", "fat", "omega6",
+]);
+
 function classify(t) {
   if (t.total == null) return "none";
-  if (t.ul != null && t.total > t.ul) return "ul";
-  if (t.rda == null) return "none";
-  const ratio = t.total / t.rda;
-  if (ratio < 0.5)  return "under";
-  if (ratio < 0.9)  return "low";
-  if (ratio <= 1.5) return "ok";
-  return "over";
+
+  if (LIMIT_NUTRIENTS.has(t.code)) {
+    /* less is better; target is the soft ceiling */
+    if (t.rda == null) return "neutral";
+    return t.total > t.rda ? "bad" : "good";
+  }
+
+  if (NEUTRAL_NUTRIENTS.has(t.code)) {
+    return "neutral";
+  }
+
+  /* "good" nutrient — beneficial up to UL */
+  if (t.ul != null && t.total > t.ul) return "bad";
+  if (t.rda == null) return "neutral";
+  return t.total >= t.rda * 0.9 ? "good" : "neutral";
 }
 
 /* -------------------- formatting helpers -------------------- */

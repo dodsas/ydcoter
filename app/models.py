@@ -82,6 +82,7 @@ class NutrientTotal(BaseModel):
     category: str
     rda: Optional[float] = None
     ul: Optional[float] = None
+    excess_warning: Optional[str] = None
     sort_order: int = 0
     total: float
 

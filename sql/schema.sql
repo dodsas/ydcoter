@@ -51,16 +51,17 @@ CREATE INDEX IF NOT EXISTS idx_measure_year  ON measurements(year);
 -- ===========================================================================
 
 CREATE TABLE IF NOT EXISTS nutrients (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    code        TEXT    NOT NULL UNIQUE,
-    name_ko     TEXT    NOT NULL,
-    name_en     TEXT,
-    unit        TEXT    NOT NULL,
-    category    TEXT    NOT NULL,          -- 'macro' | 'vitamin' | 'mineral' | 'other'
-    rda         REAL,                       -- recommended daily allowance (adult male)
-    ul          REAL,                       -- tolerable upper intake limit
-    sort_order  INTEGER NOT NULL DEFAULT 0,
-    note        TEXT
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    code            TEXT    NOT NULL UNIQUE,
+    name_ko         TEXT    NOT NULL,
+    name_en         TEXT,
+    unit            TEXT    NOT NULL,
+    category        TEXT    NOT NULL,      -- 'macro' | 'vitamin' | 'mineral' | 'other'
+    rda             REAL,                   -- recommended daily allowance (adult male)
+    ul              REAL,                   -- tolerable upper intake limit
+    sort_order      INTEGER NOT NULL DEFAULT 0,
+    note            TEXT,
+    excess_warning  TEXT                    -- shown when intake exceeds target / UL
 );
 
 CREATE TABLE IF NOT EXISTS nutrition_logs (
@@ -95,7 +96,8 @@ CREATE INDEX IF NOT EXISTS idx_logs_profile_date ON nutrition_logs(profile_id, l
 CREATE INDEX IF NOT EXISTS idx_values_log        ON nutrition_values(log_id);
 CREATE INDEX IF NOT EXISTS idx_values_nutrient   ON nutrition_values(nutrient_id);
 
-CREATE VIEW IF NOT EXISTS v_daily_nutrition AS
+DROP VIEW IF EXISTS v_daily_nutrition;
+CREATE VIEW v_daily_nutrition AS
 SELECT
     l.profile_id,
     p.slug                         AS profile_slug,
@@ -108,6 +110,7 @@ SELECT
     n.category,
     COALESCE(po.rda, n.rda)        AS rda,
     COALESCE(po.ul,  n.ul)         AS ul,
+    n.excess_warning,
     n.sort_order,
     SUM(v.amount)                  AS total
 FROM nutrition_logs   l
@@ -118,7 +121,8 @@ LEFT JOIN profile_nutrient_rda po
     ON po.profile_id = l.profile_id AND po.nutrient_id = n.id
 GROUP BY l.profile_id, l.log_date, n.id;
 
-CREATE VIEW IF NOT EXISTS v_measurements AS
+DROP VIEW IF EXISTS v_measurements;
+CREATE VIEW v_measurements AS
 SELECT
     m.id           AS measurement_id,
     i.id           AS item_id,

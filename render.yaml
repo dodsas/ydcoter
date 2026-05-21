@@ -1,13 +1,14 @@
 # Render Blueprint — https://render.com/docs/blueprint-spec
 #
-# Default profile: free tier, stateless.
-# The DB is rebuilt from seed_data.py at every build, so user edits made
-# through the Settings page survive container restarts but are wiped on
-# every redeploy.
+# Persistence model
+# -----------------
+# Render free tier has an ephemeral filesystem. To survive deploys, set
+# `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` in the Render dashboard. When
+# those are set the app talks to Turso instead of the local SQLite file,
+# and `python -m app.load_data` only seeds when Turso is empty.
 #
-# For persistent edits across deploys, uncomment the `disk` block and
-# switch `plan` to `starter` (paid). Then re-deploy: the bundled DB
-# from build time will be copied to the disk on first boot.
+# Without Turso the app still works but every deploy wipes user data
+# (calling `--reset` would do the same on purpose — for local clean state).
 
 services:
   - type: web
@@ -27,12 +28,19 @@ services:
       - key: PYTHON_VERSION
         value: "3.12"
 
+      # ---- Turso (production persistence) ----
+      # Set TURSO_DATABASE_URL + TURSO_AUTH_TOKEN in the Render dashboard
+      # (Settings → Environment). `sync: false` keeps them editable in
+      # the dashboard and out of source control.
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+
       # ---- yclaude (Claude CLI gateway) ----
       # YCLAUDE_BASE_URL and YCLAUDE_API_KEY are required for the
-      # "free-text -> structured day log" feature. Set the secret value
-      # in the Render dashboard (Settings → Environment) — do NOT
-      # commit it here. `sync: false` tells Render to leave the value
-      # editable in the dashboard.
+      # "free-text -> structured day log" feature. Set them in the
+      # Render dashboard — do NOT commit secrets here.
       - key: YCLAUDE_BASE_URL
         sync: false
       - key: YCLAUDE_API_KEY
@@ -43,13 +51,3 @@ services:
       # DEFAULT_MODEL is used.
       # - key: YCLAUDE_MODEL
       #   value: opus
-
-      # Uncomment together with the disk block below for persistent edits.
-      # - key: YDOCTER_DB_PATH
-      #   value: /var/data/health.db
-
-    # ---- optional persistent disk (paid, ~$1/mo for 1GB) ----
-    # disk:
-    #   name: ydocter-data
-    #   mountPath: /var/data
-    #   sizeGB: 1

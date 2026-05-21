@@ -1,8 +1,18 @@
-"""Initialize the SQLite database and load seed health records.
+"""Initialize the database and load seed health records.
 
-Usage:
-    python -m app.load_data        # idempotent: drops and reloads seed data
-    python -m app.load_data --keep # only ensures schema; leaves data alone
+Three modes:
+
+    python -m app.load_data           # default: SAFE — ensures schema,
+                                        seeds only if profiles table is
+                                        empty. User-entered data preserved.
+    python -m app.load_data --reset   # destructive — drops every table
+                                        and reseeds from scratch. Use only
+                                        for local development.
+    python -m app.load_data --keep    # legacy alias for safe mode (schema
+                                        only, no seeding even when empty).
+
+Production (Render) and any environment with ``TURSO_DATABASE_URL`` set
+should always run the default mode so user edits survive deploys.
 """
 from __future__ import annotations
 
@@ -98,7 +108,18 @@ def parse_value(raw: Optional[str]) -> Tuple[Optional[float], Optional[str]]:
     return None, s
 
 
-def load(reset: bool = True) -> None:
+def load(reset: bool = False, schema_only: bool = False) -> None:
+    """Apply schema migrations + optionally seed data.
+
+    Arguments:
+        reset:        Wipe every app table before applying schema. DESTRUCTIVE.
+                      Default False — preserves user-entered data across deploys.
+        schema_only:  Apply schema, then return without checking whether to seed.
+                      Useful when you want to migrate columns and nothing else.
+
+    Without flags (the deploy/safe default): runs schema migration, then
+    seeds only if the ``profiles`` table is empty.
+    """
     conn = connect()
     try:
         if reset:
@@ -115,8 +136,19 @@ def load(reset: bool = True) -> None:
             )
         init_schema(conn)
 
-        if not reset:
-            print(f"Schema ensured -> {conn.execute('PRAGMA database_list').fetchone()['file']}")
+        if schema_only:
+            print("Schema ensured (schema-only mode); data left untouched.")
+            return
+
+        # Detect whether we should seed. Seed iff profiles table is empty.
+        existing_profiles = conn.execute(
+            "SELECT COUNT(*) AS n FROM profiles"
+        ).fetchone()["n"]
+        if existing_profiles > 0 and not reset:
+            print(
+                f"Schema ensured. {existing_profiles} profiles already present — "
+                "skipping seed (use --reset to force reseed)."
+            )
             return
 
         profile_count = 0
@@ -192,14 +224,23 @@ def load(reset: bool = True) -> None:
 def _seed_nutrition(conn) -> tuple[int, int, int]:
     """Insert nutrient master list + daily food logs from nutrition_data.py."""
     nutrient_id_by_code: dict[str, int] = {}
-    for code, name_ko, name_en, unit, category, rda, ul, sort_order, note in NUTRIENTS:
+    for row in NUTRIENTS:
+        # The NUTRIENTS tuple grew over time; older rows may still be 9-wide.
+        if len(row) == 9:
+            code, name_ko, name_en, unit, category, rda, ul, sort_order, note = row
+            excess_warning = None
+        else:
+            (code, name_ko, name_en, unit, category, rda, ul, sort_order,
+             note, excess_warning) = row
         cur = conn.execute(
             """
             INSERT INTO nutrients
-              (code, name_ko, name_en, unit, category, rda, ul, sort_order, note)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+              (code, name_ko, name_en, unit, category, rda, ul,
+               sort_order, note, excess_warning)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (code, name_ko, name_en, unit, category, rda, ul, sort_order, note),
+            (code, name_ko, name_en, unit, category, rda, ul,
+             sort_order, note, excess_warning),
         )
         nutrient_id_by_code[code] = cur.lastrowid
 
@@ -279,4 +320,7 @@ def _seed_profile_rda(conn, profile_rows, nutrient_id_by_code: dict[str, int]) -
 
 
 if __name__ == "__main__":
-    load(reset="--keep" not in sys.argv)
+    load(
+        reset="--reset" in sys.argv,
+        schema_only="--keep" in sys.argv,
+    )

@@ -1805,12 +1805,10 @@ a:hover { border-bottom-color: var(--ink); }
   transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.nutri-row[data-status="under"] .bar-fill { background: var(--low); }
-.nutri-row[data-status="low"]   .bar-fill { background: var(--low); opacity: 0.55; }
-.nutri-row[data-status="ok"]    .bar-fill { background: var(--normal); }
-.nutri-row[data-status="over"]  .bar-fill { background: var(--high); opacity: 0.7; }
-.nutri-row[data-status="ul"]    .bar-fill { background: var(--ul); }
-.nutri-row[data-status="none"]  .bar-fill { background: var(--ink-disabled); opacity: 0.5; }
+.nutri-row[data-status="good"]    .bar-fill { background: var(--normal); }
+.nutri-row[data-status="bad"]     .bar-fill { background: var(--high); }
+.nutri-row[data-status="neutral"] .bar-fill { background: var(--low); }
+.nutri-row[data-status="none"]    .bar-fill { background: var(--ink-disabled); opacity: 0.5; }
 
 /* RDA reference marker at the halfway mark (since bar caps at 200% of RDA) */
 .bar-rda {
@@ -1846,11 +1844,9 @@ a:hover { border-bottom-color: var(--ink); }
 .legend-pct {
   font-weight: 600;
 }
-.nutri-row[data-status="under"] .legend-pct { color: var(--low); }
-.nutri-row[data-status="low"]   .legend-pct { color: var(--low); }
-.nutri-row[data-status="ok"]    .legend-pct { color: var(--normal); }
-.nutri-row[data-status="over"]  .legend-pct { color: var(--high); }
-.nutri-row[data-status="ul"]    .legend-pct { color: var(--ul); }
+.nutri-row[data-status="good"]    .legend-pct { color: var(--normal); }
+.nutri-row[data-status="bad"]     .legend-pct { color: var(--high); }
+.nutri-row[data-status="neutral"] .legend-pct { color: var(--low); }
 .legend-pct.muted { color: var(--ink-disabled); }
 
 .legend-rda {
@@ -2435,4 +2431,43 @@ a:hover { border-bottom-color: var(--ink); }
   padding: 0.15rem 0.5rem;
   border-radius: 2px;
   border: 1px solid var(--rule);
+}
+
+.nutri-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin-top: 0.45rem;
+  padding: 0.4rem 0.55rem 0.4rem 0.5rem;
+  background: var(--high-bg);
+  border-left: 2px solid var(--high);
+  border-radius: 0 2px 2px 0;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: var(--high);
+  letter-spacing: 0.01em;
+}
+
+.warning-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-top: 0.05rem;
+  background: var(--high);
+  color: #FFFFFF;
+  border-radius: 50%;
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 0.66rem;
+  line-height: 1;
+}
+
+.warning-text {
+  flex: 1;
+  min-width: 0;
+  word-break: keep-all;
 }

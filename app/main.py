@@ -358,7 +358,7 @@ def _load_daily_nutrition(
     totals_rows = conn.execute(
         """
         SELECT nutrient_id, nutrient_code AS code, name_ko, name_en,
-               unit, category, rda, ul, sort_order, total
+               unit, category, rda, ul, excess_warning, sort_order, total
         FROM v_daily_nutrition
         WHERE profile_id = ? AND log_date = ?
         ORDER BY sort_order
@@ -514,7 +514,7 @@ def list_nutrients() -> List[NutrientTotal]:
         rows = conn.execute(
             """
             SELECT id AS nutrient_id, code, name_ko, name_en, unit, category,
-                   rda, ul, sort_order, 0 AS total
+                   rda, ul, excess_warning, sort_order, 0 AS total
             FROM nutrients
             ORDER BY sort_order
             """
