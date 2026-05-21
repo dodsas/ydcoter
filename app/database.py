@@ -154,12 +154,46 @@ def connect():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    # Local-only PRAGMAs. WAL improves concurrent read/write on the
+    # bundled file DB. Turso uses its own storage so these are skipped.
+    conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
 def init_schema(conn) -> None:
-    conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+    """Apply schema DDL.
+
+    libsql's ``executescript`` against a remote Turso server has been
+    observed to silently abandon trailing statements if it hits anything
+    it considers non-DDL — and in particular drops PRAGMA. To stay robust
+    on both backends we split into individual statements and run each
+    via ``execute`` (autocommit). Empty / pure-comment chunks are ignored.
+    """
+    raw = SCHEMA_PATH.read_text(encoding="utf-8")
+    for stmt in _split_sql(raw):
+        conn.execute(stmt)
+    conn.commit()
+
+
+def _split_sql(script: str) -> list[str]:
+    """Naively split a SQL script on semicolons, ignoring those inside
+    string literals (we don't have any in this codebase) and skipping
+    blank / comment-only fragments.
+    """
+    pieces = [p.strip() for p in script.split(";")]
+    out: list[str] = []
+    for p in pieces:
+        if not p:
+            continue
+        # strip pure-comment lines so we don't send empty payloads
+        non_comment = "\n".join(
+            line for line in p.splitlines()
+            if line.strip() and not line.strip().startswith("--")
+        )
+        if non_comment.strip():
+            out.append(non_comment)
+    return out
 
 
 @contextmanager

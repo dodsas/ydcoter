@@ -1,7 +1,6 @@
--- ydocter health records schema (SQLite)
-
-PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys = ON;
+-- ydocter health records schema — portable between local SQLite and
+-- Turso (libSQL). Per-backend PRAGMAs (WAL journal, FK enforcement) are
+-- applied inside app/database.py::connect() so this file is pure DDL.
 
 CREATE TABLE IF NOT EXISTS profiles (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
