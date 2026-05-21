@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
-from app.database import DB_PATH, connect, get_conn, init_schema
+from app.database import DB_PATH, TURSO_URL, connect, get_conn, init_schema, using_turso
 from app.models import (
     DailyNutrition,
     Measurement,
@@ -107,7 +107,8 @@ def healthcheck() -> dict:
         "profiles": profiles,
         "items": items,
         "measurements": measures,
-        "db": str(DB_PATH),
+        "backend": "turso" if using_turso() else "sqlite",
+        "db": TURSO_URL if using_turso() else str(DB_PATH),
     }
 
 

@@ -29,10 +29,18 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator, Sequence
 
+from dotenv import load_dotenv
+
 ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = Path(os.environ.get("YDOCTER_DB_PATH", ROOT / "data" / "health.db"))
 SCHEMA_PATH = ROOT / "sql" / "schema.sql"
 
+# Load the local .env *before* reading any env var. `app.config` also does
+# this, but `app.load_data` imports us without going through config, so we
+# need to be self-sufficient. override=False keeps real shell env vars
+# winning over .env (matches the convention used in app.config).
+load_dotenv(ROOT / ".env", override=False)
+
+DB_PATH = Path(os.environ.get("YDOCTER_DB_PATH", ROOT / "data" / "health.db"))
 TURSO_URL = os.environ.get("TURSO_DATABASE_URL", "").strip()
 TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN", "").strip()
 
