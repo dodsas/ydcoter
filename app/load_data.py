@@ -11,6 +11,12 @@ import sys
 from typing import Optional, Tuple
 
 from app.database import connect, init_schema
+from app.nutrition_data import (
+    LOGS as NUTRITION_LOGS,
+    NUTRIENTS,
+    RDA_BY_SEX,
+    estimate_kcal_tdee,
+)
 from app.seed_data import PROFILES, RECORDS
 
 _RANGE_RE = re.compile(r"^\s*\d+(?:\.\d+)?\s*[~\-]\s*\d+(?:\.\d+)?\s*$")
@@ -97,6 +103,11 @@ def load(reset: bool = True) -> None:
     try:
         if reset:
             conn.executescript(
+                "DROP VIEW  IF EXISTS v_daily_nutrition;"
+                "DROP TABLE IF EXISTS profile_nutrient_rda;"
+                "DROP TABLE IF EXISTS nutrition_values;"
+                "DROP TABLE IF EXISTS nutrition_logs;"
+                "DROP TABLE IF EXISTS nutrients;"
                 "DROP VIEW  IF EXISTS v_measurements;"
                 "DROP TABLE IF EXISTS measurements;"
                 "DROP TABLE IF EXISTS test_items;"
@@ -115,14 +126,18 @@ def load(reset: bool = True) -> None:
         for profile in PROFILES:
             cur = conn.execute(
                 """
-                INSERT INTO profiles (slug, display_name, note, sort_order)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO profiles
+                  (slug, display_name, note, sort_order, sex, birth_year, height_cm)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     profile["slug"],
                     profile["display_name"],
                     profile.get("note"),
                     profile.get("sort_order", 0),
+                    profile.get("sex"),
+                    profile.get("birth_year"),
+                    profile.get("height_cm"),
                 ),
             )
             profile_id = cur.lastrowid
@@ -160,14 +175,107 @@ def load(reset: bool = True) -> None:
                     )
                     measure_count += 1
 
+        nutrient_count, log_count, value_count = _seed_nutrition(conn)
+
         conn.commit()
         path = conn.execute("PRAGMA database_list").fetchone()["file"]
         print(
             f"Loaded {profile_count} profiles / {item_count} items / "
-            f"{measure_count} measurements -> {path}"
+            f"{measure_count} measurements / "
+            f"{nutrient_count} nutrients / {log_count} food logs / "
+            f"{value_count} nutrient values -> {path}"
         )
     finally:
         conn.close()
+
+
+def _seed_nutrition(conn) -> tuple[int, int, int]:
+    """Insert nutrient master list + daily food logs from nutrition_data.py."""
+    nutrient_id_by_code: dict[str, int] = {}
+    for code, name_ko, name_en, unit, category, rda, ul, sort_order, note in NUTRIENTS:
+        cur = conn.execute(
+            """
+            INSERT INTO nutrients
+              (code, name_ko, name_en, unit, category, rda, ul, sort_order, note)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (code, name_ko, name_en, unit, category, rda, ul, sort_order, note),
+        )
+        nutrient_id_by_code[code] = cur.lastrowid
+
+    profile_rows = conn.execute(
+        "SELECT id, slug, sex, birth_year, height_cm FROM profiles"
+    ).fetchall()
+    profile_id_by_slug = {row["slug"]: row["id"] for row in profile_rows}
+
+    _seed_profile_rda(conn, profile_rows, nutrient_id_by_code)
+
+    log_count = 0
+    value_count = 0
+    for sort_idx, entry in enumerate(NUTRITION_LOGS):
+        slug = entry["profile_slug"]
+        if slug not in profile_id_by_slug:
+            raise ValueError(f"unknown profile slug in nutrition log: {slug}")
+        cur = conn.execute(
+            """
+            INSERT INTO nutrition_logs
+              (profile_id, log_date, meal_type, food_name, serving, sort_order, note)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                profile_id_by_slug[slug],
+                entry["date"],
+                entry["meal"],
+                entry["food"],
+                entry.get("serving"),
+                sort_idx,
+                entry.get("note"),
+            ),
+        )
+        log_id = cur.lastrowid
+        log_count += 1
+        for code, amount in entry.get("values", {}).items():
+            if code not in nutrient_id_by_code:
+                raise ValueError(f"unknown nutrient code: {code}")
+            conn.execute(
+                """
+                INSERT INTO nutrition_values (log_id, nutrient_id, amount)
+                VALUES (?, ?, ?)
+                """,
+                (log_id, nutrient_id_by_code[code], float(amount)),
+            )
+            value_count += 1
+
+    return len(NUTRIENTS), log_count, value_count
+
+
+def _seed_profile_rda(conn, profile_rows, nutrient_id_by_code: dict[str, int]) -> None:
+    """Write per-profile RDA overrides derived from sex + Mifflin-St Jeor.
+
+    Skips profiles with no `sex` set so the catalog defaults stand in.
+    """
+    for row in profile_rows:
+        sex = row["sex"]
+        if sex not in RDA_BY_SEX:
+            continue
+        base = dict(RDA_BY_SEX[sex])
+        if row["birth_year"] and row["height_cm"]:
+            base["kcal"] = estimate_kcal_tdee(
+                sex=sex,
+                birth_year=row["birth_year"],
+                height_cm=row["height_cm"],
+            )
+        for code, value in base.items():
+            nutrient_id = nutrient_id_by_code.get(code)
+            if nutrient_id is None:
+                continue
+            conn.execute(
+                """
+                INSERT INTO profile_nutrient_rda (profile_id, nutrient_id, rda)
+                VALUES (?, ?, ?)
+                """,
+                (row["id"], nutrient_id, float(value)),
+            )
 
 
 if __name__ == "__main__":

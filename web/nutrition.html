@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>ydocter — Nutrition Ledger</title>
+  <meta name="description" content="Daily nutrition log: foods, calories, and key vitamins/minerals against RDA." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body class="nutrition-mode">
+  <header class="masthead">
+    <div class="masthead-row">
+      <div class="brand">
+        <span class="brand-mark">y</span>
+        <span class="brand-name">ydocter</span>
+        <span class="brand-tag">Nutrition Ledger</span>
+      </div>
+
+      <div class="profile-switch" id="profile-switch" data-open="false">
+        <button class="profile-trigger" id="profile-trigger" aria-haspopup="listbox" aria-expanded="false">
+          <span class="profile-trigger-label">Profile</span>
+          <span class="profile-trigger-name" id="profile-current-name">—</span>
+          <span class="profile-trigger-chevron" aria-hidden="true">▾</span>
+        </button>
+        <ul class="profile-menu" id="profile-menu" role="listbox"></ul>
+      </div>
+
+      <div class="rail">
+        <span class="rail-cell">
+          <span class="rail-label">Date</span>
+          <span class="rail-value" id="rail-date">—</span>
+        </span>
+        <span class="rail-cell">
+          <span class="rail-label">Foods</span>
+          <span class="rail-value" id="rail-foods">—</span>
+        </span>
+        <span class="rail-cell">
+          <span class="rail-label">kcal</span>
+          <span class="rail-value" id="rail-kcal">—</span>
+        </span>
+        <a class="rail-cell rail-cell--action" href="/">
+          <span class="rail-label">Return</span>
+          <span class="rail-value">← Health Records</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <section class="nutri-intro">
+    <h1 class="nutri-title">Daily nutrition</h1>
+    <p class="nutri-lede" id="nutri-lede">
+      Per-day log of food and supplement intake, summed against personalized
+      <strong>Korean RDA (KDRI 2020)</strong> and tolerable upper limits.
+      Pick a date to see the breakdown.
+    </p>
+    <div class="nutri-profile-summary" id="profile-summary" hidden></div>
+  </section>
+
+  <section class="nutri-calendar-wrap">
+    <div class="nutri-cal" id="cal" aria-label="Date picker"></div>
+  </section>
+
+  <main class="nutri-grid" id="grid">
+    <aside class="nutri-left">
+      <section class="nutri-compose" id="compose" hidden>
+        <header class="compose-head">
+          <div class="compose-titles">
+            <span class="compose-label">Compose</span>
+            <span class="compose-date" id="compose-date">—</span>
+          </div>
+          <button class="compose-toggle" id="compose-toggle" type="button" aria-expanded="false">
+            <span class="compose-toggle-label">+ Add entries</span>
+          </button>
+        </header>
+        <div class="compose-body" id="compose-body" hidden>
+          <p class="compose-help">
+            먹은 음식을 자유롭게 적으세요. Claude가 분석해 영양소를 자동 계산합니다.
+          </p>
+          <pre class="compose-example">예시:
+점심: KFC 징거버거, 너겟 5조각
+저녁: 신라면 (국물 1/3), 계란 2개
+간식: 쌀로별 1봉</pre>
+          <textarea
+            id="compose-text"
+            class="compose-text"
+            rows="6"
+            placeholder="끼니별로 적어주세요. 분량(개수·양)을 같이 적으면 정확도가 올라갑니다."
+          ></textarea>
+          <label class="compose-replace">
+            <input type="checkbox" id="compose-replace" />
+            <span>이 날 기존 기록 삭제하고 새로 저장</span>
+          </label>
+          <div class="compose-actions">
+            <button class="compose-cancel" id="compose-cancel" type="button">취소</button>
+            <button class="compose-submit" id="compose-submit" type="button">
+              <span class="submit-label">Claude로 분석 → 저장</span>
+              <span class="submit-spinner" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="compose-status" id="compose-status" hidden></div>
+        </div>
+      </section>
+
+      <section class="nutri-meals" id="meals" aria-live="polite"></section>
+    </aside>
+    <section class="nutri-totals" id="totals" aria-live="polite"></section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-legend">
+      <span class="legend legend--low">UNDER</span>
+      <span class="legend legend--normal">ON TARGET</span>
+      <span class="legend legend--high">OVER</span>
+      <span class="legend legend--ul">UL EXCEEDED</span>
+    </div>
+    <div class="footer-meta">
+      <span>SQLite · FastAPI</span>
+      <span class="footer-dot">·</span>
+      <a href="/docs">API /docs</a>
+    </div>
+  </footer>
+
+  <script src="/assets/profile.js" defer></script>
+  <script src="/assets/nutrition.js" defer></script>
+</body>
+</html>

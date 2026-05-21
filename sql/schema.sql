@@ -9,6 +9,9 @@ CREATE TABLE IF NOT EXISTS profiles (
     display_name  TEXT    NOT NULL,
     note          TEXT,
     sort_order    INTEGER NOT NULL DEFAULT 0,
+    sex           TEXT,                 -- 'male' | 'female' | NULL
+    birth_year    INTEGER,
+    height_cm     REAL,
     created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -42,6 +45,78 @@ CREATE INDEX IF NOT EXISTS idx_items_major   ON test_items(major_category);
 CREATE INDEX IF NOT EXISTS idx_items_minor   ON test_items(minor_category);
 CREATE INDEX IF NOT EXISTS idx_measure_item  ON measurements(item_id);
 CREATE INDEX IF NOT EXISTS idx_measure_year  ON measurements(year);
+
+-- ===========================================================================
+-- Nutrition tracking
+-- ===========================================================================
+
+CREATE TABLE IF NOT EXISTS nutrients (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    code        TEXT    NOT NULL UNIQUE,
+    name_ko     TEXT    NOT NULL,
+    name_en     TEXT,
+    unit        TEXT    NOT NULL,
+    category    TEXT    NOT NULL,          -- 'macro' | 'vitamin' | 'mineral' | 'other'
+    rda         REAL,                       -- recommended daily allowance (adult male)
+    ul          REAL,                       -- tolerable upper intake limit
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    note        TEXT
+);
+
+CREATE TABLE IF NOT EXISTS nutrition_logs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id  INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    log_date    TEXT    NOT NULL,           -- ISO date 'YYYY-MM-DD'
+    meal_type   TEXT    NOT NULL,           -- 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'supplement'
+    food_name   TEXT    NOT NULL,
+    serving     TEXT,                       -- free-text serving description
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    note        TEXT
+);
+
+CREATE TABLE IF NOT EXISTS nutrition_values (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    log_id      INTEGER NOT NULL REFERENCES nutrition_logs(id) ON DELETE CASCADE,
+    nutrient_id INTEGER NOT NULL REFERENCES nutrients(id) ON DELETE CASCADE,
+    amount      REAL    NOT NULL,
+    UNIQUE (log_id, nutrient_id)
+);
+
+-- Per-profile RDA / UL overrides. NULL = inherit nutrients.rda / nutrients.ul.
+CREATE TABLE IF NOT EXISTS profile_nutrient_rda (
+    profile_id  INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    nutrient_id INTEGER NOT NULL REFERENCES nutrients(id) ON DELETE CASCADE,
+    rda         REAL,
+    ul          REAL,
+    PRIMARY KEY (profile_id, nutrient_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_logs_profile_date ON nutrition_logs(profile_id, log_date);
+CREATE INDEX IF NOT EXISTS idx_values_log        ON nutrition_values(log_id);
+CREATE INDEX IF NOT EXISTS idx_values_nutrient   ON nutrition_values(nutrient_id);
+
+CREATE VIEW IF NOT EXISTS v_daily_nutrition AS
+SELECT
+    l.profile_id,
+    p.slug                         AS profile_slug,
+    l.log_date,
+    n.id                           AS nutrient_id,
+    n.code                         AS nutrient_code,
+    n.name_ko,
+    n.name_en,
+    n.unit,
+    n.category,
+    COALESCE(po.rda, n.rda)        AS rda,
+    COALESCE(po.ul,  n.ul)         AS ul,
+    n.sort_order,
+    SUM(v.amount)                  AS total
+FROM nutrition_logs   l
+JOIN nutrition_values v ON v.log_id = l.id
+JOIN nutrients        n ON n.id = v.nutrient_id
+JOIN profiles         p ON p.id = l.profile_id
+LEFT JOIN profile_nutrient_rda po
+    ON po.profile_id = l.profile_id AND po.nutrient_id = n.id
+GROUP BY l.profile_id, l.log_date, n.id;
 
 CREATE VIEW IF NOT EXISTS v_measurements AS
 SELECT

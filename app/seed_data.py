@@ -21,6 +21,9 @@ PROFILES = [
         "note": "Primary record owner.",
         "has_data": True,
         "sort_order": 1,
+        "sex": "male",
+        "birth_year": 1987,
+        "height_cm": 187.0,
     },
     {
         "slug": "jjuni",
@@ -28,6 +31,9 @@ PROFILES = [
         "note": "신규 프로필 — 데이터 입력 전.",
         "has_data": False,
         "sort_order": 2,
+        "sex": "female",
+        "birth_year": 1990,
+        "height_cm": 165.0,
     },
 ]
 

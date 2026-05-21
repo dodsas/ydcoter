@@ -26,6 +26,24 @@ services:
       # canonical way to pin it on Render and overrides runtime.txt.
       - key: PYTHON_VERSION
         value: "3.12"
+
+      # ---- yclaude (Claude CLI gateway) ----
+      # YCLAUDE_BASE_URL and YCLAUDE_API_KEY are required for the
+      # "free-text -> structured day log" feature. Set the secret value
+      # in the Render dashboard (Settings → Environment) — do NOT
+      # commit it here. `sync: false` tells Render to leave the value
+      # editable in the dashboard.
+      - key: YCLAUDE_BASE_URL
+        sync: false
+      - key: YCLAUDE_API_KEY
+        sync: false
+      - key: YCLAUDE_CLIENT_ID
+        value: ydocter
+      # Optional: pin a Claude model. Otherwise the yclaude server's
+      # DEFAULT_MODEL is used.
+      # - key: YCLAUDE_MODEL
+      #   value: opus
+
       # Uncomment together with the disk block below for persistent edits.
       # - key: YDOCTER_DB_PATH
       #   value: /var/data/health.db

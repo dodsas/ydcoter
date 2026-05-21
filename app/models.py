@@ -12,6 +12,9 @@ class Profile(BaseModel):
     display_name: str
     note: Optional[str] = None
     sort_order: int = 0
+    sex: Optional[str] = None
+    birth_year: Optional[int] = None
+    height_cm: Optional[float] = None
     item_count: int = 0
     measurement_count: int = 0
 
@@ -52,6 +55,65 @@ class TrendPoint(BaseModel):
 class Trend(BaseModel):
     item: TestItem
     points: List[TrendPoint]
+
+
+class NutritionLog(BaseModel):
+    id: int
+    profile_id: int
+    log_date: str
+    meal_type: str
+    food_name: str
+    serving: Optional[str] = None
+    sort_order: int = 0
+    note: Optional[str] = None
+
+
+class NutritionLogEntry(BaseModel):
+    log: NutritionLog
+    values: dict  # { nutrient_code: amount }
+
+
+class NutrientTotal(BaseModel):
+    nutrient_id: int
+    code: str
+    name_ko: str
+    name_en: Optional[str] = None
+    unit: str
+    category: str
+    rda: Optional[float] = None
+    ul: Optional[float] = None
+    sort_order: int = 0
+    total: float
+
+
+class DailyNutrition(BaseModel):
+    profile_slug: str
+    log_date: str
+    logs: List[NutritionLogEntry]
+    totals: List[NutrientTotal]
+
+
+class NutritionDateSummary(BaseModel):
+    log_date: str
+    entry_count: int
+    kcal: Optional[float] = None
+
+
+class NutritionParseRequest(BaseModel):
+    """Free-text food log to be parsed by Claude.
+
+    ``replace`` deletes any existing entries for the date first — the
+    common case when the user revises a day. Default is False so a user
+    can accumulate entries across multiple submissions.
+    """
+    text: str
+    replace: bool = False
+    model_config = {"extra": "forbid"}
+
+
+class NutritionParseResponse(BaseModel):
+    inserted: int
+    day: DailyNutrition
 
 
 class ReferenceUpdate(BaseModel):

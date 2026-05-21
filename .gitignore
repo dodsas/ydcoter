@@ -3,7 +3,11 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# Secrets — keep the template tracked, ignore everything else
 .env
+.env.*
+!.env.example
 
 # SQLite (local DB files)
 data/*.db
