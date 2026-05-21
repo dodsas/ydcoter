@@ -426,11 +426,30 @@ def nutrition_parse(
         ]
         nutrient_id_by_code = {row["code"]: row["id"] for row in catalog}
 
+        # In append mode, hand the existing entries to Claude as context so
+        # it won't re-emit them. In replace mode we still pass them — Claude
+        # ignores the context once we delete + treat the new text as the
+        # full day; but in practice we just clear the list to be safe.
+        existing: list[dict] = []
+        if not body.replace:
+            existing = [
+                dict(r) for r in conn.execute(
+                    """
+                    SELECT meal_type, food_name, serving
+                    FROM nutrition_logs
+                    WHERE profile_id = ? AND log_date = ?
+                    ORDER BY sort_order, id
+                    """,
+                    (pid, log_date),
+                ).fetchall()
+            ]
+
         try:
             entries = parse_food_text(
                 text,
                 nutrient_catalog=catalog,
                 date_iso=log_date,
+                existing_entries=existing,
             )
         except YClaudeError as exc:
             raise HTTPException(exc.status_code, str(exc)) from exc
@@ -479,7 +498,13 @@ def nutrition_parse(
         conn.commit()
         day = _load_daily_nutrition(conn, pid, log_date)
 
-    return NutritionParseResponse(inserted=inserted, day=day)
+    return NutritionParseResponse(
+        inserted=inserted,
+        existing_before=len(existing),
+        total_after=len(day.logs),
+        mode="replace" if body.replace else "append",
+        day=day,
+    )
 
 
 @app.get("/nutrients", response_model=List[NutrientTotal])

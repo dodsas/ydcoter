@@ -10,13 +10,14 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
+  <link rel="icon" type="image/svg+xml" href="/assets/doctor.svg" />
   <link rel="stylesheet" href="/assets/styles.css" />
 </head>
 <body class="nutrition-mode">
   <header class="masthead">
     <div class="masthead-row">
       <div class="brand">
-        <span class="brand-mark">y</span>
+        <span class="brand-mark">yd</span>
         <span class="brand-name">ydocter</span>
         <span class="brand-tag">Nutrition Ledger</span>
       </div>
@@ -72,6 +73,7 @@
           <div class="compose-titles">
             <span class="compose-label">Compose</span>
             <span class="compose-date" id="compose-date">—</span>
+            <span class="compose-existing" id="compose-existing" hidden></span>
           </div>
           <button class="compose-toggle" id="compose-toggle" type="button" aria-expanded="false">
             <span class="compose-toggle-label">+ Add entries</span>
@@ -93,7 +95,7 @@
           ></textarea>
           <label class="compose-replace">
             <input type="checkbox" id="compose-replace" />
-            <span>이 날 기존 기록 삭제하고 새로 저장</span>
+            <span id="compose-replace-label">이 날 기존 기록 삭제하고 새로 저장 (체크 안 하면 추가 저장)</span>
           </label>
           <div class="compose-actions">
             <button class="compose-cancel" id="compose-cancel" type="button">취소</button>

@@ -16,7 +16,7 @@ const CATEGORY_LABEL = {
   macro:   "Macros & Energy",
   mineral: "Minerals",
   vitamin: "Vitamins",
-  other:   "Other",
+  other:   "Fatty acids & Other",
 };
 
 const state = {
@@ -332,13 +332,23 @@ function renderCompose() {
   compose.hidden = false;
   document.getElementById("compose-date").textContent = prettyDate(state.selectedDate);
 
-  /* keep panel state across re-renders */
+  /* existing-entry chip — shows count + flips toggle label */
+  const existingEl = document.getElementById("compose-existing");
+  const count = state.day?.logs?.length || 0;
+  if (count > 0) {
+    existingEl.hidden = false;
+    existingEl.textContent = `${count}개 기록됨`;
+  } else {
+    existingEl.hidden = true;
+  }
+
+  /* toggle label hints at append vs first entry */
   const body = document.getElementById("compose-body");
   const toggle = document.getElementById("compose-toggle");
   const open = !body.hidden;
   toggle.setAttribute("aria-expanded", open ? "true" : "false");
   toggle.querySelector(".compose-toggle-label").textContent =
-    open ? "✕ Close" : "+ Add entries";
+    open ? "✕ Close" : (count > 0 ? "+ 추가 입력" : "+ Add entries");
 }
 
 function setComposeOpen(open) {
@@ -393,10 +403,16 @@ async function submitCompose() {
     state.dates = await fetch(`/nutrition/dates${qs}`).then(must);
     state.byDate = new Map(state.dates.map((d) => [d.log_date, d]));
 
-    showStatus(`저장 완료 — ${data.inserted}개 항목 추가됨.`, "success");
+    const successMsg =
+      data.mode === "replace"
+        ? `기존 ${data.existing_before}개 삭제 후 ${data.inserted}개 저장 — 총 ${data.total_after}개`
+        : `${data.inserted}개 추가됨 (기존 ${data.existing_before} → 총 ${data.total_after}개)`;
+    showStatus(successMsg, "success");
+
     textEl.value = "";
     replEl.checked = false;
     renderCalendar();
+    renderCompose();
     renderMeals();
     renderTotals();
     renderRail();

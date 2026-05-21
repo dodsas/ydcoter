@@ -113,6 +113,9 @@ class NutritionParseRequest(BaseModel):
 
 class NutritionParseResponse(BaseModel):
     inserted: int
+    existing_before: int
+    total_after: int
+    mode: str                 # 'append' | 'replace'
     day: DailyNutrition
 
 

@@ -44,18 +44,29 @@ def parse_food_text(
     *,
     nutrient_catalog: Iterable[dict],
     date_iso: str,
+    existing_entries: list[dict] | None = None,
 ) -> list[ParsedEntry]:
     """Send ``text`` to Claude and return validated entries.
 
     ``nutrient_catalog`` is the live nutrient table fetched from SQLite —
     we hand the full code list to Claude so its output uses only codes
     we recognise. Unknown codes in the response are dropped.
+
+    ``existing_entries`` is the list of food rows already stored for this
+    date — passed to Claude as context so it knows not to re-emit them.
+    Each item should be a dict with at least ``meal_type``, ``food_name``,
+    and optional ``serving``.
     """
     catalog = list(nutrient_catalog)
     if not catalog:
         raise ValueError("nutrient_catalog is empty — load_data must run first")
 
-    prompt = _build_prompt(text, catalog=catalog, date_iso=date_iso)
+    prompt = _build_prompt(
+        text,
+        catalog=catalog,
+        date_iso=date_iso,
+        existing_entries=existing_entries or [],
+    )
     raw = yclaude.chat(prompt)
     payload = _extract_json(raw)
 
@@ -129,6 +140,9 @@ _PROMPT_HEADER = """\
 7. 추정값은 합리적인 한국 식품 영양 데이터(식약처 식품영양정보 수준)에 기반.
    확신이 없는 영양소는 생략 — 0 을 넣지 말 것.
 8. 응답에 적힌 단위는 무시되고 amount 만 저장되므로, **반드시 코드 옆 단위로 환산**해서 숫자만 넣을 것.
+9. **추가 입력 모드**: "이미 저장된 항목" 섹션이 비어있지 않으면 그 항목들은 절대 다시 출력하지 마세요. \
+오직 "신규 식단 설명" 텍스트에 새로 적힌 음식만 entries 에 포함합니다. \
+같은 끼니(meal)라도 음식이 다르면 별도 entry 로 추가하세요.
 
 영양소 코드 목록:
 """
@@ -136,16 +150,26 @@ _PROMPT_HEADER = """\
 _PROMPT_FOOTER_TEMPLATE = """
 
 대상 날짜: {date}
-사용자 식단 설명:
+
+이미 저장된 항목 ({existing_count}개):
+{existing_block}
+
+신규 식단 설명 (이 텍스트의 음식만 entries 로 변환):
 \"\"\"
 {text}
 \"\"\"
 
-이제 JSON 만 출력하세요.
+이제 JSON 만 출력하세요. entries 에는 위 신규 텍스트에 새로 등장한 음식만 넣습니다.
 """
 
 
-def _build_prompt(text: str, *, catalog: list[dict], date_iso: str) -> str:
+def _build_prompt(
+    text: str,
+    *,
+    catalog: list[dict],
+    date_iso: str,
+    existing_entries: list[dict],
+) -> str:
     rows = []
     for row in catalog:
         bits = [f"- {row['code']} ({row['unit']}) — {row['name_ko']}"]
@@ -156,11 +180,30 @@ def _build_prompt(text: str, *, catalog: list[dict], date_iso: str) -> str:
         rows.append(" · ".join(bits))
     catalog_block = "\n".join(rows)
 
+    existing_block = _format_existing(existing_entries)
+
     return (
         _PROMPT_HEADER
         + catalog_block
-        + _PROMPT_FOOTER_TEMPLATE.format(date=date_iso, text=text.strip())
+        + _PROMPT_FOOTER_TEMPLATE.format(
+            date=date_iso,
+            existing_count=len(existing_entries),
+            existing_block=existing_block,
+            text=text.strip(),
+        )
     )
+
+
+def _format_existing(entries: list[dict]) -> str:
+    if not entries:
+        return "(없음)"
+    lines = []
+    for e in entries:
+        meal = e.get("meal_type") or "?"
+        food = e.get("food_name") or "?"
+        serving = e.get("serving")
+        lines.append(f"  - [{meal}] {food}" + (f" — {serving}" if serving else ""))
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------

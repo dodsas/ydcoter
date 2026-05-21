@@ -38,6 +38,7 @@ RDA_BY_SEX = {
         "ca": 800, "fe": 10, "mg": 370, "zn": 10, "k": 3500, "se": 60, "iodine": 150,
         "vit_a": 800, "vit_c": 100, "vit_d": 10, "vit_e": 12, "vit_k": 75,
         "b1": 1.2, "b2": 1.5, "b3": 16, "b6": 1.5, "folate": 400, "b12": 2.4, "biotin": 30,
+        "omega3": 1.6, "omega6": 13,
     },
     "female": {
         "kcal": 1900,
@@ -45,6 +46,7 @@ RDA_BY_SEX = {
         "ca": 700, "fe": 14, "mg": 280, "zn": 8, "k": 3500, "se": 60, "iodine": 150,
         "vit_a": 650, "vit_c": 100, "vit_d": 10, "vit_e": 12, "vit_k": 65,
         "b1": 1.1, "b2": 1.2, "b3": 14, "b6": 1.4, "folate": 400, "b12": 2.4, "biotin": 30,
+        "omega3": 1.1, "omega6": 10,
     },
 }
 
@@ -106,6 +108,10 @@ NUTRIENTS = [
     ("folate",   "엽산",         "Folate",         "µg",   "vitamin", 400, 1000,  39, None),
     ("b12",      "비타민 B12",   "Cobalamin",      "µg",   "vitamin", 2.4, None,  40, None),
     ("biotin",   "비오틴",       "Biotin",         "µg",   "vitamin",  30, None,  41, None),
+
+    # ---- fatty acids ----
+    ("omega3",   "오메가-3",     "Omega-3 (n-3)",  "g",    "other",   1.6, None,  50, "ALA + EPA + DHA 합산. KDRI AI"),
+    ("omega6",   "오메가-6",     "Omega-6 (n-6)",  "g",    "other",    13, None,  51, "Linoleic acid 위주. KDRI AI"),
 ]
 
 
@@ -126,6 +132,7 @@ LOGS = [
             "kcal": 535, "carb": 49, "protein": 25, "fat": 27, "fiber": 3, "sodium": 1010,
             "ca": 80, "fe": 3.0, "mg": 30, "zn": 1.8, "k": 370,
             "vit_a": 50, "vit_c": 2, "vit_d": 0.1, "b12": 0.5, "folate": 80, "b3": 6,
+            "omega3": 0.3, "omega6": 4.5,
         },
     },
     {
@@ -138,6 +145,7 @@ LOGS = [
             "kcal": 235, "carb": 12, "protein": 13, "fat": 14, "fiber": 1, "sodium": 480,
             "ca": 15, "fe": 0.8, "mg": 14, "zn": 0.6, "k": 200,
             "vit_a": 10, "vit_d": 0.1, "b12": 0.3, "folate": 20, "b3": 3,
+            "omega3": 0.15, "omega6": 2.5,
         },
     },
     {
@@ -163,6 +171,7 @@ LOGS = [
             "kcal": 435, "carb": 68, "protein": 9, "fat": 14, "fiber": 3, "sodium": 900,
             "ca": 50, "fe": 1.5, "mg": 20, "zn": 0.6, "k": 200,
             "vit_a": 30, "vit_c": 1, "folate": 60, "b3": 3,
+            "omega3": 0.05, "omega6": 2.0,
         },
     },
     {
@@ -187,6 +196,7 @@ LOGS = [
             "kcal": 150, "carb": 1, "protein": 12, "fat": 10, "sodium": 140,
             "ca": 56, "fe": 1.8, "mg": 14, "zn": 1.3, "se": 30, "k": 138, "iodine": 50,
             "vit_a": 160, "vit_d": 2.0, "vit_e": 1, "b2": 0.5, "b12": 1.1, "folate": 90,
+            "omega3": 0.07, "omega6": 1.3,
         },
     },
     {
@@ -221,6 +231,7 @@ LOGS = [
             "kcal": 57, "carb": 1.6, "protein": 2.6, "fat": 5, "fiber": 0.8,
             "ca": 9, "fe": 0.5, "mg": 17, "zn": 0.3, "k": 70,
             "vit_e": 0.8, "b3": 1.2, "folate": 25,
+            "omega3": 0.001, "omega6": 1.6,
         },
     },
 
@@ -234,6 +245,7 @@ LOGS = [
         "values": {
             "kcal": 350, "carb": 50, "protein": 4, "fat": 14, "fiber": 0.5, "sodium": 280,
             "ca": 10, "fe": 0.5, "mg": 8, "zn": 0.4, "k": 80, "folate": 10,
+            "omega3": 0.05, "omega6": 6.0,
         },
     },
 

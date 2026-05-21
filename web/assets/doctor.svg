@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="ydocter">
+  <title>ydocter</title>
+  <!-- Off-white background to stay readable on dark and light browser chrome -->
+  <rect width="32" height="32" rx="4" fill="#F2F1ED"/>
+  <!-- 'yd' wordmark in the same red used by the in-page brand-mark.
+       Newsreader is preferred but ships only via Google Fonts, so fall
+       back to widely-installed serifs for the favicon. -->
+  <text
+    x="16" y="24"
+    font-family="Newsreader, 'Source Serif Pro', Georgia, 'Times New Roman', serif"
+    font-weight="500"
+    font-size="22"
+    fill="#B83227"
+    text-anchor="middle"
+    letter-spacing="-1.2"
+  >yd</text>
+</svg>
