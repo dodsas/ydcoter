@@ -79,6 +79,12 @@
     state.current = valid ? stored : (state.profiles[0]?.slug ?? null);
     if (state.current) writeStored(state.current);
   }
+
+  // Resolve `current` synchronously from cached list + stored choice so
+  // Profile.current() returns the right slug on the first frame — before
+  // init() runs and before consumers paint chrome that depends on it.
+  if (state.profiles.length) resolveCurrent();
+
   function paint() {
     render();
     if (!bound) { bind(); bound = true; }
