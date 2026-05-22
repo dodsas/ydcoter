@@ -67,6 +67,9 @@
 
   function current() { return state.current; }
   function list()    { return state.profiles; }
+  // Sync accessor for the persisted slug — usable before init() resolves so
+  // pages can paint cached per-profile data on first frame.
+  function storedSlug() { return readStored() || readCookie(); }
 
   function set(slug) {
     if (slug === state.current) return;
@@ -161,5 +164,5 @@
       .replace(/"/g, "&quot;");
   }
 
-  window.Profile = { init, current, list, set };
+  window.Profile = { init, current, list, set, storedSlug };
 })();

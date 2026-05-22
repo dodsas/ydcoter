@@ -38,10 +38,42 @@ const MONTH_NAMES = [
 
 document.addEventListener("DOMContentLoaded", boot);
 
+/* -------------------- per-profile nutrition cache --------------------
+ * The shared `cachedFetch` from cache.js keys on `data_version` (git sha
+ * + reference epoch) which doesn't roll on user food inserts, so we keep
+ * a separate localStorage namespace and update it directly on writes. */
+const NUT_CACHE_PREFIX = "ydocter:nut:";
+function nutKey(slug, kind, ...rest) {
+  const base = `${NUT_CACHE_PREFIX}${slug || "_"}:${kind}`;
+  return rest.length ? `${base}:${rest.join(":")}` : base;
+}
+function nutRead(key) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
+  catch (e) { return null; }
+}
+function nutWrite(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); }
+  catch (e) { /* quota / private mode — silently skip */ }
+}
+
 async function boot() {
+  bindCompose();
+
+  /* Phase 1: paint calendar skeleton immediately — grid structure is a
+   * pure function of (year, month) so we don't need any server data. */
+  const today = new Date();
+  state.cursorYear  = today.getFullYear();
+  state.cursorMonth = today.getMonth() + 1;
+  renderCalendar();
+
+  /* Phase 2: optimistic paint from per-profile cache. The stored slug is
+   * available synchronously before /profiles resolves. */
+  const cachedSlug = Profile.storedSlug();
+  if (cachedSlug) paintFromCache(cachedSlug);
+
+  /* Phase 3: fresh fetches in the background, then reconcile. */
   try {
     await Profile.init({ onChange: reload });
-    bindCompose();
     await reload();
   } catch (err) {
     console.error(err);
@@ -50,11 +82,47 @@ async function boot() {
   }
 }
 
+/* Render whatever we have in cache for the given profile so the user
+ * sees populated dots, kcal, meals, and totals on the first frame. */
+function paintFromCache(slug) {
+  const dates = nutRead(nutKey(slug, "dates"));
+  if (!dates) return false;
+
+  state.dates = dates;
+  state.byDate = new Map(dates.map((d) => [d.log_date, d]));
+
+  const latest = dates[0]?.log_date ?? null;
+  if (latest) {
+    state.selectedDate = latest;
+    const seed = parseISO(latest);
+    state.cursorYear  = seed.getFullYear();
+    state.cursorMonth = seed.getMonth() + 1;
+  }
+  renderCalendar();
+
+  if (state.selectedDate) {
+    const day = nutRead(nutKey(slug, "day", state.selectedDate));
+    if (day) {
+      state.day = day;
+      renderCompose();
+      renderMeals();
+      renderTotals();
+      renderRail();
+    }
+  }
+  return true;
+}
+
 async function reload() {
   const slug = Profile.current();
   const qs = slug ? `?profile=${encodeURIComponent(slug)}` : "";
 
+  /* On profile switch, repaint cached data for the new slug before
+   * waiting on the fresh fetch. */
+  paintFromCache(slug);
+
   state.dates = await fetch(`/nutrition/dates${qs}`).then(must);
+  nutWrite(nutKey(slug, "dates"), state.dates);
   state.profiles = Profile.list();
 
   state.byDate = new Map();
@@ -92,6 +160,7 @@ async function loadDay(date) {
   if (state.byDate.has(date)) {
     try {
       state.day = await fetch(`/nutrition/${date}${qs}`).then(must);
+      nutWrite(nutKey(slug, "day", date), state.day);
     } catch (err) {
       state.day = null;
     }
@@ -394,9 +463,11 @@ async function submitCompose() {
     }
     const data = await res.json();
     state.day = data.day;
+    nutWrite(nutKey(slug, "day", state.selectedDate), state.day);
 
     /* refresh date index so the calendar dot/kcal appears */
     state.dates = await fetch(`/nutrition/dates${qs}`).then(must);
+    nutWrite(nutKey(slug, "dates"), state.dates);
     state.byDate = new Map(state.dates.map((d) => [d.log_date, d]));
 
     const successMsg =
