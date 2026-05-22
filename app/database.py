@@ -33,7 +33,8 @@ from typing import Any, Iterator, Sequence
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
-SCHEMA_PATH = ROOT / "sql" / "schema.sql"
+HEALTH_SCHEMA_PATH    = ROOT / "sql" / "schema-health.sql"
+NUTRITION_SCHEMA_PATH = ROOT / "sql" / "schema-nutrition.sql"
 
 # Load the local .env *before* reading any env var. `app.config` also does
 # this, but `app.load_data` imports us without going through config, so we
@@ -184,8 +185,8 @@ def _connect_local():
     return conn
 
 
-def init_schema(conn) -> None:
-    """Apply schema DDL.
+def _apply_schema(conn, path: Path) -> None:
+    """Apply schema DDL from a file.
 
     libsql's ``executescript`` against a remote Turso server has been
     observed to silently abandon trailing statements if it hits anything
@@ -193,30 +194,37 @@ def init_schema(conn) -> None:
     on both backends we split into individual statements and run each
     via ``execute`` (autocommit). Empty / pure-comment chunks are ignored.
     """
-    raw = SCHEMA_PATH.read_text(encoding="utf-8")
+    raw = path.read_text(encoding="utf-8")
     for stmt in _split_sql(raw):
         conn.execute(stmt)
     conn.commit()
 
 
+def init_health_schema(conn) -> None:
+    """Health-records schema: profiles + test_items + measurements +
+    v_measurements view. Applied to the local SQLite DB."""
+    _apply_schema(conn, HEALTH_SCHEMA_PATH)
+
+
+def init_nutrition_schema(conn) -> None:
+    """Nutrition schema: nutrients + nutrition_logs + nutrition_values +
+    profile_nutrient_rda. Applied to Turso in prod, or to local in
+    dev-fallback mode."""
+    _apply_schema(conn, NUTRITION_SCHEMA_PATH)
+
+
 def _split_sql(script: str) -> list[str]:
     """Naively split a SQL script on semicolons, ignoring those inside
-    string literals (we don't have any in this codebase) and skipping
-    blank / comment-only fragments.
+    string literals (we don't have any in this codebase) and inside
+    ``--`` line comments.
     """
-    pieces = [p.strip() for p in script.split(";")]
-    out: list[str] = []
-    for p in pieces:
-        if not p:
-            continue
-        # strip pure-comment lines so we don't send empty payloads
-        non_comment = "\n".join(
-            line for line in p.splitlines()
-            if line.strip() and not line.strip().startswith("--")
-        )
-        if non_comment.strip():
-            out.append(non_comment)
-    return out
+    # Strip line comments first so a stray ``;`` inside a comment doesn't
+    # split a statement.
+    no_comments = "\n".join(
+        line for line in script.splitlines()
+        if not line.strip().startswith("--")
+    )
+    return [p.strip() for p in no_comments.split(";") if p.strip()]
 
 
 # ---------------------------------------------------------------------------

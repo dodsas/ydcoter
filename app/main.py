@@ -24,7 +24,8 @@ from app.database import (
     connect,
     get_conn,
     get_local_conn,
-    init_schema,
+    init_health_schema,
+    init_nutrition_schema,
     using_turso,
 )
 from app.models import (
@@ -67,13 +68,20 @@ app.add_middleware(
 
 @app.on_event("startup")
 def _ensure_schema() -> None:
+    # Local: only init when the shipped data/health.db is absent (fresh
+    # clones / volumes). In dev-fallback (no Turso), also apply the
+    # nutrition schema so the same file can serve both roles.
     if not DB_PATH.exists():
-        conn = connect()
-        try:
-            init_schema(conn)
-            conn.commit()
-        finally:
-            conn.close()
+        with get_local_conn() as conn:
+            init_health_schema(conn)
+            if not using_turso():
+                init_nutrition_schema(conn)
+
+    # Turso: idempotent — `CREATE TABLE IF NOT EXISTS` is cheap and keeps
+    # the prod schema in sync with whatever ships in sql/schema-nutrition.sql.
+    if using_turso():
+        with get_conn() as conn:
+            init_nutrition_schema(conn)
 
 
 # ===========================================================================

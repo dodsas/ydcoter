@@ -20,7 +20,13 @@ import re
 import sys
 from typing import Optional, Tuple
 
-from app.database import connect, init_schema
+from app.database import (
+    _connect_local,
+    connect,
+    init_health_schema,
+    init_nutrition_schema,
+    using_turso,
+)
 from app.nutrition_data import (
     LOGS as NUTRITION_LOGS,
     NUTRIENTS,
@@ -120,28 +126,43 @@ def load(reset: bool = False, schema_only: bool = False) -> None:
     Without flags (the deploy/safe default): runs schema migration, then
     seeds only if the ``profiles`` table is empty.
     """
-    conn = connect()
+    # Split-DB seeding: health records (profiles/test_items/measurements)
+    # always go to the local SQLite file; nutrition tables go to Turso when
+    # configured, else share the local conn (dev fallback).
+    health_conn = _connect_local()
+    nutri_conn  = connect() if using_turso() else health_conn
+    same_db     = nutri_conn is health_conn
+
     try:
         if reset:
-            conn.executescript(
-                "DROP VIEW  IF EXISTS v_daily_nutrition;"
-                "DROP TABLE IF EXISTS profile_nutrient_rda;"
-                "DROP TABLE IF EXISTS nutrition_values;"
-                "DROP TABLE IF EXISTS nutrition_logs;"
-                "DROP TABLE IF EXISTS nutrients;"
-                "DROP VIEW  IF EXISTS v_measurements;"
-                "DROP TABLE IF EXISTS measurements;"
-                "DROP TABLE IF EXISTS test_items;"
-                "DROP TABLE IF EXISTS profiles;"
-            )
-        init_schema(conn)
+            # Health side
+            for stmt in (
+                "DROP VIEW  IF EXISTS v_measurements",
+                "DROP TABLE IF EXISTS measurements",
+                "DROP TABLE IF EXISTS test_items",
+            ):
+                health_conn.execute(stmt)
+            # Nutrition side (separate DB unless dev-fallback)
+            for stmt in (
+                "DROP TABLE IF EXISTS profile_nutrient_rda",
+                "DROP TABLE IF EXISTS nutrition_values",
+                "DROP TABLE IF EXISTS nutrition_logs",
+                "DROP TABLE IF EXISTS nutrients",
+            ):
+                nutri_conn.execute(stmt)
+            # Profiles is shared as an FK target — drop on both.
+            health_conn.execute("DROP TABLE IF EXISTS profiles")
+            if not same_db:
+                nutri_conn.execute("DROP TABLE IF EXISTS profiles")
+
+        init_health_schema(health_conn)
+        init_nutrition_schema(nutri_conn)
 
         if schema_only:
             print("Schema ensured (schema-only mode); data left untouched.")
             return
 
-        # Detect whether we should seed. Seed iff profiles table is empty.
-        existing_profiles = conn.execute(
+        existing_profiles = health_conn.execute(
             "SELECT COUNT(*) AS n FROM profiles"
         ).fetchone()["n"]
         if existing_profiles > 0 and not reset:
@@ -156,7 +177,7 @@ def load(reset: bool = False, schema_only: bool = False) -> None:
         measure_count = 0
 
         for profile in PROFILES:
-            cur = conn.execute(
+            cur = health_conn.execute(
                 """
                 INSERT INTO profiles
                   (slug, display_name, note, sort_order, sex, birth_year, height_cm)
@@ -175,9 +196,31 @@ def load(reset: bool = False, schema_only: bool = False) -> None:
             profile_id = cur.lastrowid
             profile_count += 1
 
+            # Mirror the row onto the nutrition DB with an explicit id so
+            # FK references from nutrition_logs / profile_nutrient_rda
+            # resolve to the same row.
+            if not same_db:
+                nutri_conn.execute(
+                    """
+                    INSERT INTO profiles
+                      (id, slug, display_name, note, sort_order, sex, birth_year, height_cm)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        profile_id,
+                        profile["slug"],
+                        profile["display_name"],
+                        profile.get("note"),
+                        profile.get("sort_order", 0),
+                        profile.get("sex"),
+                        profile.get("birth_year"),
+                        profile.get("height_cm"),
+                    ),
+                )
+
             for (major, minor, code, name, values,
                  ref_min, ref_max, ref_indicator, related, memo) in RECORDS:
-                cur = conn.execute(
+                cur = health_conn.execute(
                     """
                     INSERT INTO test_items
                       (profile_id, major_category, minor_category, code, name,
@@ -198,7 +241,7 @@ def load(reset: bool = False, schema_only: bool = False) -> None:
                     text = normalize_value_text(text)
                     if num is None and text is None:
                         continue
-                    conn.execute(
+                    health_conn.execute(
                         """
                         INSERT INTO measurements (item_id, year, value_numeric, value_text)
                         VALUES (?, ?, ?, ?)
@@ -207,22 +250,31 @@ def load(reset: bool = False, schema_only: bool = False) -> None:
                     )
                     measure_count += 1
 
-        nutrient_count, log_count, value_count = _seed_nutrition(conn)
+        nutrient_count, log_count, value_count = _seed_nutrition(
+            health_conn, nutri_conn
+        )
 
-        conn.commit()
-        path = conn.execute("PRAGMA database_list").fetchone()["file"]
+        health_conn.commit()
+        if not same_db:
+            nutri_conn.commit()
         print(
             f"Loaded {profile_count} profiles / {item_count} items / "
             f"{measure_count} measurements / "
             f"{nutrient_count} nutrients / {log_count} food logs / "
-            f"{value_count} nutrient values -> {path}"
+            f"{value_count} nutrient values"
         )
     finally:
-        conn.close()
+        health_conn.close()
+        if not same_db:
+            nutri_conn.close()
 
 
-def _seed_nutrition(conn) -> tuple[int, int, int]:
-    """Insert nutrient master list + daily food logs from nutrition_data.py."""
+def _seed_nutrition(health_conn, nutri_conn) -> tuple[int, int, int]:
+    """Seed nutrients + daily food logs.
+
+    Reads profile id/slug/sex/etc. from ``health_conn`` (authoritative);
+    writes nutrient + log rows to ``nutri_conn`` (Turso in prod, same
+    handle as health_conn in dev-fallback)."""
     nutrient_id_by_code: dict[str, int] = {}
     for row in NUTRIENTS:
         # The NUTRIENTS tuple grew over time; older rows may still be 9-wide.
@@ -232,7 +284,7 @@ def _seed_nutrition(conn) -> tuple[int, int, int]:
         else:
             (code, name_ko, name_en, unit, category, rda, ul, sort_order,
              note, excess_warning) = row
-        cur = conn.execute(
+        cur = nutri_conn.execute(
             """
             INSERT INTO nutrients
               (code, name_ko, name_en, unit, category, rda, ul,
@@ -244,12 +296,12 @@ def _seed_nutrition(conn) -> tuple[int, int, int]:
         )
         nutrient_id_by_code[code] = cur.lastrowid
 
-    profile_rows = conn.execute(
+    profile_rows = health_conn.execute(
         "SELECT id, slug, sex, birth_year, height_cm FROM profiles"
     ).fetchall()
     profile_id_by_slug = {row["slug"]: row["id"] for row in profile_rows}
 
-    _seed_profile_rda(conn, profile_rows, nutrient_id_by_code)
+    _seed_profile_rda(nutri_conn, profile_rows, nutrient_id_by_code)
 
     log_count = 0
     value_count = 0
@@ -257,7 +309,7 @@ def _seed_nutrition(conn) -> tuple[int, int, int]:
         slug = entry["profile_slug"]
         if slug not in profile_id_by_slug:
             raise ValueError(f"unknown profile slug in nutrition log: {slug}")
-        cur = conn.execute(
+        cur = nutri_conn.execute(
             """
             INSERT INTO nutrition_logs
               (profile_id, log_date, meal_type, food_name, serving, sort_order, note)
@@ -278,7 +330,7 @@ def _seed_nutrition(conn) -> tuple[int, int, int]:
         for code, amount in entry.get("values", {}).items():
             if code not in nutrient_id_by_code:
                 raise ValueError(f"unknown nutrient code: {code}")
-            conn.execute(
+            nutri_conn.execute(
                 """
                 INSERT INTO nutrition_values (log_id, nutrient_id, amount)
                 VALUES (?, ?, ?)
