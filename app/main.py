@@ -385,9 +385,7 @@ def _load_daily_nutrition(
     # Drive from the full nutrients catalog so every tracked nutrient shows
     # up — even ones the user hasn't logged today. Missing rows surface as
     # total=0, which lets the frontend render the row and its "권장 식품"
-    # hint instead of silently omitting it. v_daily_nutrition is INNER-
-    # JOINed to nutrition_values, so it can't tell us about un-logged
-    # nutrients on its own.
+    # hint instead of silently omitting it.
     totals_rows = conn.execute(
         """
         SELECT

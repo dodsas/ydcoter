@@ -1,15 +1,17 @@
 """Initialize the database and load seed health records.
 
-Three modes:
+Modes:
 
-    python -m app.load_data           # default: SAFE — ensures schema,
-                                        seeds only if profiles table is
-                                        empty. User-entered data preserved.
-    python -m app.load_data --reset   # destructive — drops every table
-                                        and reseeds from scratch. Use only
-                                        for local development.
-    python -m app.load_data --keep    # legacy alias for safe mode (schema
-                                        only, no seeding even when empty).
+    python -m app.load_data                  # default: SAFE — ensures
+                                               schema, seeds only if
+                                               profiles table is empty.
+    python -m app.load_data --reset          # destructive — drops every
+                                               table and reseeds. Local
+                                               only.
+    python -m app.load_data --keep           # legacy alias for safe mode.
+    python -m app.load_data --turso-cleanup  # one-shot: drop legacy
+                                               health tables/views from
+                                               Turso after the split.
 
 Production (Render) and any environment with ``TURSO_DATABASE_URL`` set
 should always run the default mode so user edits survive deploys.
@@ -21,7 +23,9 @@ import sys
 from typing import Optional, Tuple
 
 from app.database import (
+    ROOT,
     _connect_local,
+    _split_sql,
     connect,
     init_health_schema,
     init_nutrition_schema,
@@ -144,6 +148,7 @@ def load(reset: bool = False, schema_only: bool = False) -> None:
                 health_conn.execute(stmt)
             # Nutrition side (separate DB unless dev-fallback)
             for stmt in (
+                "DROP VIEW  IF EXISTS v_daily_nutrition",
                 "DROP TABLE IF EXISTS profile_nutrient_rda",
                 "DROP TABLE IF EXISTS nutrition_values",
                 "DROP TABLE IF EXISTS nutrition_logs",
@@ -371,8 +376,40 @@ def _seed_profile_rda(conn, profile_rows, nutrient_id_by_code: dict[str, int]) -
             )
 
 
+def turso_cleanup() -> None:
+    """Apply sql/turso-cleanup.sql against Turso only.
+
+    Drops legacy health tables/views (test_items, measurements,
+    v_measurements, v_daily_nutrition) that are no longer queried after
+    the split. Refuses to run without ``TURSO_DATABASE_URL`` so it can't
+    accidentally drop the local seed data.
+    """
+    if not using_turso():
+        print(
+            "ERROR: --turso-cleanup requires TURSO_DATABASE_URL.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    path = ROOT / "sql" / "turso-cleanup.sql"
+    statements = _split_sql(path.read_text(encoding="utf-8"))
+
+    conn = connect()
+    try:
+        for stmt in statements:
+            print(f"  > {stmt};")
+            conn.execute(stmt)
+        conn.commit()
+    finally:
+        conn.close()
+    print(f"Turso cleanup applied ({len(statements)} statements).")
+
+
 if __name__ == "__main__":
-    load(
-        reset="--reset" in sys.argv,
-        schema_only="--keep" in sys.argv,
-    )
+    if "--turso-cleanup" in sys.argv:
+        turso_cleanup()
+    else:
+        load(
+            reset="--reset" in sys.argv,
+            schema_only="--keep" in sys.argv,
+        )
