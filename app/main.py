@@ -458,6 +458,9 @@ def nutrition_parse(
     with get_local_conn() as lconn:
         pid, slug = _resolve_profile(lconn, profile)
 
+    # Read phase. Close the libsql connection before the (slow) Claude
+    # call — Turso/Hrana drops idle streams and the next query on the
+    # same conn would 404 with "stream not found".
     with get_conn() as conn:
         catalog = [
             dict(r)
@@ -485,16 +488,19 @@ def nutrition_parse(
                 ).fetchall()
             ]
 
-        try:
-            entries = parse_food_text(
-                text,
-                nutrient_catalog=catalog,
-                date_iso=log_date,
-                existing_entries=existing,
-            )
-        except YClaudeError as exc:
-            raise HTTPException(exc.status_code, str(exc)) from exc
+    try:
+        entries = parse_food_text(
+            text,
+            nutrient_catalog=catalog,
+            date_iso=log_date,
+            existing_entries=existing,
+        )
+    except YClaudeError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
 
+    # Write phase. Fresh connection so we don't reuse a stream that may
+    # have been recycled by Turso during the Claude round-trip.
+    with get_conn() as conn:
         if body.replace:
             conn.execute(
                 "DELETE FROM nutrition_logs WHERE profile_id = ? AND log_date = ?",
