@@ -270,6 +270,7 @@ function renderCalCell(c, todayISO) {
   return `
     <button class="${classes.join(" ")}" data-date="${iso}" aria-pressed="${isSelected}" type="button">
       <span class="cal-day">${c.d}</span>
+      ${isToday ? `<span class="cal-today-badge">TODAY</span>` : ""}
       ${data ? `<span class="cal-kcal">${kcal}</span>` : `<span class="cal-kcal-placeholder"></span>`}
       ${data ? `<span class="cal-dot" aria-hidden="true"></span>` : ""}
     </button>
