@@ -14,7 +14,7 @@ from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
@@ -671,21 +671,28 @@ def version() -> dict:
     }
 
 
+def _render_html(name: str) -> HTMLResponse:
+    # Substitute {{V}} with data_version so cached `?v=…` URLs invalidate
+    # whenever a new build (or reference edit) ships.
+    html = (WEB_DIR / name).read_text(encoding="utf-8")
+    return HTMLResponse(html.replace("{{V}}", _data_version()))
+
+
 @app.get("/", include_in_schema=False)
-def root() -> FileResponse:
-    return FileResponse(str(WEB_DIR / "nutrition.html"))
+def root() -> HTMLResponse:
+    return _render_html("nutrition.html")
 
 
 @app.get("/dashboard", include_in_schema=False)
-def dashboard() -> FileResponse:
-    return FileResponse(str(WEB_DIR / "index.html"))
+def dashboard() -> HTMLResponse:
+    return _render_html("index.html")
 
 
 @app.get("/settings", include_in_schema=False)
-def settings_page() -> FileResponse:
-    return FileResponse(str(WEB_DIR / "settings.html"))
+def settings_page() -> HTMLResponse:
+    return _render_html("settings.html")
 
 
 @app.get("/nutrition", include_in_schema=False)
-def nutrition_page() -> FileResponse:
-    return FileResponse(str(WEB_DIR / "nutrition.html"))
+def nutrition_page() -> HTMLResponse:
+    return _render_html("nutrition.html")
