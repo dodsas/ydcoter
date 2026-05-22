@@ -66,10 +66,15 @@ async function boot() {
   state.cursorMonth = today.getMonth() + 1;
   renderCalendar();
 
-  /* Phase 2: optimistic paint from per-profile cache. The stored slug is
-   * available synchronously before /profiles resolves. */
+  /* Phase 2: optimistic paint from per-profile cache. The stored slug and
+   * profile list are both available synchronously before /profiles
+   * resolves, so the RDA-basis chip + calendar dots paint on frame one. */
   const cachedSlug = Profile.storedSlug();
-  if (cachedSlug) paintFromCache(cachedSlug);
+  if (cachedSlug) {
+    state.profiles = Profile.list();
+    renderProfileSummary();
+    paintFromCache(cachedSlug);
+  }
 
   /* Phase 3: fresh fetches in the background, then reconcile. */
   try {
