@@ -1,25 +1,53 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="ydocter">
   <title>ydocter</title>
-  <!-- Transparent background — favicon floats on whatever browser chrome
-       sits behind it. The home-screen counterpart is a separate PNG so
-       iOS can fill its own backdrop. -->
-  <!-- 'yd' wordmark in the same red used by the in-page brand-mark.
-       Newsreader is preferred but ships only via Google Fonts, so fall
-       back to widely-installed serifs for the favicon. -->
-  <text
-    x="13" y="24"
-    font-family="Newsreader, 'Source Serif Pro', Georgia, 'Times New Roman', serif"
-    font-weight="500"
-    font-size="22"
-    fill="#B83227"
-    text-anchor="middle"
-    letter-spacing="-1.2"
-  >yd</text>
-  <!-- Hospital-cross '+' raised to upper-right as a superscript so the
-       wordmark reads 'yd⁺' — clinical/medical tone without overpowering
-       the serif. -->
-  <g fill="#B83227" transform="translate(25.5, 10)">
-    <rect x="-3"    y="-0.85" width="6"   height="1.7" rx="0.35"/>
-    <rect x="-0.85" y="-3"    width="1.7" height="6"   rx="0.35"/>
-  </g>
+
+  <!-- Ivory rounded background — same family as the in-page paper tone. -->
+  <rect width="32" height="32" rx="6" fill="#EFE6D1"/>
+
+  <!-- Hair cap (back of head, sits behind face) -->
+  <path d="M 9.5 12.5 C 9.5 6.5, 22.5 6.5, 22.5 12.5 L 22.5 14 L 9.5 14 Z"
+        fill="#2A2218"/>
+
+  <!-- Face -->
+  <circle cx="16" cy="13.5" r="5.2" fill="#F0CFA7"/>
+
+  <!-- Ears -->
+  <ellipse cx="10.9" cy="14"   rx="0.9" ry="1.2" fill="#E7BE93"/>
+  <ellipse cx="21.1" cy="14"   rx="0.9" ry="1.2" fill="#E7BE93"/>
+
+  <!-- Eyes -->
+  <circle cx="14" cy="13.6" r="0.55" fill="#1E1812"/>
+  <circle cx="18" cy="13.6" r="0.55" fill="#1E1812"/>
+
+  <!-- Smile -->
+  <path d="M 14.5 16 Q 16 17 17.5 16"
+        stroke="#8A5530" stroke-width="0.55" stroke-linecap="round" fill="none"/>
+
+  <!-- Neck -->
+  <rect x="14.7" y="18" width="2.6" height="3.4" fill="#E7BE93"/>
+
+  <!-- White lab coat with V-neck collar -->
+  <path d="M 4 32
+           L 4 26
+           Q 4.5 22 10 21
+           L 16 25
+           L 22 21
+           Q 27.5 22 28 26
+           L 28 32 Z"
+        fill="#FFFFFF" stroke="#D8D0B8" stroke-width="0.35"/>
+
+  <!-- Stethoscope earpieces (tiny dots tucked behind ears) -->
+  <circle cx="10.4" cy="15.5" r="0.6" fill="#B83227"/>
+  <circle cx="21.6" cy="15.5" r="0.6" fill="#B83227"/>
+
+  <!-- Stethoscope tubes: down from each earpiece, sweeping under the chin
+       to meet at the chestpiece. -->
+  <path d="M 10.4 16   Q 9 22, 12.5 24.5 Q 14.5 26, 16 27"
+        stroke="#B83227" stroke-width="1.05" stroke-linecap="round" fill="none"/>
+  <path d="M 21.6 16   Q 23 22, 19.5 24.5 Q 17.5 26, 16 27"
+        stroke="#B83227" stroke-width="1.05" stroke-linecap="round" fill="none"/>
+
+  <!-- Chestpiece (the round metal disc) -->
+  <circle cx="16" cy="28.2" r="1.9" fill="#B83227"/>
+  <circle cx="16" cy="28.2" r="0.85" fill="#EFE6D1"/>
 </svg>
