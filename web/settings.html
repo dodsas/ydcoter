@@ -10,8 +10,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
-  <link rel="icon" type="image/svg+xml" href="/assets/doctor.svg" />
-  <link rel="stylesheet" href="/assets/styles.css" />
+  <link rel="icon" type="image/svg+xml" href="/assets/doctor.svg?v={{V}}" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v={{V}}" />
+  <link rel="stylesheet" href="/assets/styles.css?v={{V}}" />
 </head>
 <body class="settings-mode">
   <header class="masthead">
@@ -40,7 +41,7 @@
           <span class="rail-label">Pending</span>
           <span class="rail-value" id="rail-pending">0</span>
         </span>
-        <a class="rail-cell rail-cell--action" href="/">
+        <a class="rail-cell rail-cell--action" href="/dashboard">
           <span class="rail-label">Return</span>
           <span class="rail-value">← Dashboard</span>
         </a>
@@ -82,7 +83,7 @@
 
   <div class="toast" id="toast" aria-live="polite"></div>
 
-  <script src="/assets/profile.js" defer></script>
-  <script src="/assets/settings.js" defer></script>
+  <script src="/assets/profile.js?v={{V}}" defer></script>
+  <script src="/assets/settings.js?v={{V}}" defer></script>
 </body>
 </html>

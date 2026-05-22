@@ -5,13 +5,16 @@ Run:
 """
 from __future__ import annotations
 
+import os
 import re
+import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
@@ -21,7 +24,8 @@ from app.database import (
     connect,
     get_conn,
     get_local_conn,
-    init_schema,
+    init_health_schema,
+    init_nutrition_schema,
     using_turso,
 )
 from app.models import (
@@ -64,13 +68,20 @@ app.add_middleware(
 
 @app.on_event("startup")
 def _ensure_schema() -> None:
+    # Local: only init when the shipped data/health.db is absent (fresh
+    # clones / volumes). In dev-fallback (no Turso), also apply the
+    # nutrition schema so the same file can serve both roles.
     if not DB_PATH.exists():
-        conn = connect()
-        try:
-            init_schema(conn)
-            conn.commit()
-        finally:
-            conn.close()
+        with get_local_conn() as conn:
+            init_health_schema(conn)
+            if not using_turso():
+                init_nutrition_schema(conn)
+
+    # Turso: idempotent — `CREATE TABLE IF NOT EXISTS` is cheap and keeps
+    # the prod schema in sync with whatever ships in sql/schema-nutrition.sql.
+    if using_turso():
+        with get_conn() as conn:
+            init_nutrition_schema(conn)
 
 
 # ===========================================================================
@@ -374,9 +385,7 @@ def _load_daily_nutrition(
     # Drive from the full nutrients catalog so every tracked nutrient shows
     # up — even ones the user hasn't logged today. Missing rows surface as
     # total=0, which lets the frontend render the row and its "권장 식품"
-    # hint instead of silently omitting it. v_daily_nutrition is INNER-
-    # JOINed to nutrition_values, so it can't tell us about un-logged
-    # nutrients on its own.
+    # hint instead of silently omitting it.
     totals_rows = conn.execute(
         """
         SELECT
@@ -458,6 +467,9 @@ def nutrition_parse(
     with get_local_conn() as lconn:
         pid, slug = _resolve_profile(lconn, profile)
 
+    # Read phase. Close the libsql connection before the (slow) Claude
+    # call — Turso/Hrana drops idle streams and the next query on the
+    # same conn would 404 with "stream not found".
     with get_conn() as conn:
         catalog = [
             dict(r)
@@ -485,16 +497,19 @@ def nutrition_parse(
                 ).fetchall()
             ]
 
-        try:
-            entries = parse_food_text(
-                text,
-                nutrient_catalog=catalog,
-                date_iso=log_date,
-                existing_entries=existing,
-            )
-        except YClaudeError as exc:
-            raise HTTPException(exc.status_code, str(exc)) from exc
+    try:
+        entries = parse_food_text(
+            text,
+            nutrient_catalog=catalog,
+            date_iso=log_date,
+            existing_entries=existing,
+        )
+    except YClaudeError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
 
+    # Write phase. Fresh connection so we don't reuse a stream that may
+    # have been recycled by Turso during the Claude round-trip.
+    with get_conn() as conn:
         if body.replace:
             conn.execute(
                 "DELETE FROM nutrition_logs WHERE profile_id = ? AND log_date = ?",
@@ -609,6 +624,10 @@ def update_reference(item_id: int, body: ReferenceUpdate) -> TestItem:
         row = conn.execute(
             "SELECT * FROM test_items WHERE id = ?", (item_id,)
         ).fetchone()
+
+    global _REFERENCE_EPOCH
+    _REFERENCE_EPOCH += 1
+
     return TestItem(**dict(row))
 
 
@@ -619,16 +638,67 @@ if (WEB_DIR / "assets").exists():
     app.mount("/assets", StaticFiles(directory=str(WEB_DIR / "assets")), name="assets")
 
 
+def _resolve_commit() -> str:
+    # Render exposes RENDER_GIT_COMMIT; locally we read from .git.
+    commit = os.environ.get("RENDER_GIT_COMMIT", "").strip()
+    if commit:
+        return commit
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(WEB_DIR.parent),
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+    except Exception:
+        return ""
+
+
+_GIT_COMMIT = _resolve_commit()
+_STARTED_AT = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+# Bumped whenever a reference value is edited — the dashboard cache on the
+# client keys its localStorage entries off `data_version`, so a bump
+# invalidates every cached payload on the next load.
+_REFERENCE_EPOCH = 0
+
+
+def _data_version() -> str:
+    short = _GIT_COMMIT[:7] if _GIT_COMMIT else "dev"
+    return f"{short}.{_REFERENCE_EPOCH}"
+
+
+@app.get("/version", include_in_schema=False)
+def version() -> dict:
+    return {
+        "commit": _GIT_COMMIT,
+        "commit_short": _GIT_COMMIT[:7] if _GIT_COMMIT else "",
+        "deployed_at": _STARTED_AT,
+        "data_version": _data_version(),
+    }
+
+
+def _render_html(name: str) -> HTMLResponse:
+    # Substitute {{V}} with data_version so cached `?v=…` URLs invalidate
+    # whenever a new build (or reference edit) ships.
+    html = (WEB_DIR / name).read_text(encoding="utf-8")
+    return HTMLResponse(html.replace("{{V}}", _data_version()))
+
+
 @app.get("/", include_in_schema=False)
-def dashboard() -> FileResponse:
-    return FileResponse(str(WEB_DIR / "index.html"))
+def root() -> HTMLResponse:
+    return _render_html("nutrition.html")
+
+
+@app.get("/dashboard", include_in_schema=False)
+def dashboard() -> HTMLResponse:
+    return _render_html("index.html")
 
 
 @app.get("/settings", include_in_schema=False)
-def settings_page() -> FileResponse:
-    return FileResponse(str(WEB_DIR / "settings.html"))
+def settings_page() -> HTMLResponse:
+    return _render_html("settings.html")
 
 
 @app.get("/nutrition", include_in_schema=False)
-def nutrition_page() -> FileResponse:
-    return FileResponse(str(WEB_DIR / "nutrition.html"))
+def nutrition_page() -> HTMLResponse:
+    return _render_html("nutrition.html")

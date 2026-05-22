@@ -84,8 +84,8 @@ async function reload() {
 
   const qs = slug ? `?profile=${encodeURIComponent(slug)}` : "";
   const [items, measurements] = await Promise.all([
-    fetch(`/items${qs}`).then(must),
-    fetch(`/measurements${qs}`).then(must),
+    cachedFetch(`/items${qs}`),
+    cachedFetch(`/measurements${qs}`),
   ]);
   state.items = items;
 
@@ -430,7 +430,7 @@ async function openDetail(itemId) {
   body.innerHTML = `<p class="detail-empty">Loading…</p>`;
 
   try {
-    const res = await fetch(`/items/${itemId}/trend`).then(must);
+    const res = await cachedFetch(`/items/${itemId}/trend`);
     body.innerHTML = renderDetail(res);
 
     /* animate chart line draw */

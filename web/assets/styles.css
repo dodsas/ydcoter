@@ -837,6 +837,12 @@ a:hover { border-bottom-color: var(--ink); }
   color: var(--ink-soft);
   border-bottom: 1px solid var(--rule-strong);
 }
+.footer-version {
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+}
 
 .legend {
   font-family: var(--mono);
