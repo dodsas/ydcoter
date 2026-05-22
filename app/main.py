@@ -618,6 +618,10 @@ def update_reference(item_id: int, body: ReferenceUpdate) -> TestItem:
         row = conn.execute(
             "SELECT * FROM test_items WHERE id = ?", (item_id,)
         ).fetchone()
+
+    global _REFERENCE_EPOCH
+    _REFERENCE_EPOCH += 1
+
     return TestItem(**dict(row))
 
 
@@ -646,6 +650,16 @@ def _resolve_commit() -> str:
 _GIT_COMMIT = _resolve_commit()
 _STARTED_AT = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
+# Bumped whenever a reference value is edited — the dashboard cache on the
+# client keys its localStorage entries off `data_version`, so a bump
+# invalidates every cached payload on the next load.
+_REFERENCE_EPOCH = 0
+
+
+def _data_version() -> str:
+    short = _GIT_COMMIT[:7] if _GIT_COMMIT else "dev"
+    return f"{short}.{_REFERENCE_EPOCH}"
+
 
 @app.get("/version", include_in_schema=False)
 def version() -> dict:
@@ -653,6 +667,7 @@ def version() -> dict:
         "commit": _GIT_COMMIT,
         "commit_short": _GIT_COMMIT[:7] if _GIT_COMMIT else "",
         "deployed_at": _STARTED_AT,
+        "data_version": _data_version(),
     }
 
 
