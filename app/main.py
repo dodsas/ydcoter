@@ -672,6 +672,11 @@ def version() -> dict:
 
 
 @app.get("/", include_in_schema=False)
+def root() -> FileResponse:
+    return FileResponse(str(WEB_DIR / "nutrition.html"))
+
+
+@app.get("/dashboard", include_in_schema=False)
 def dashboard() -> FileResponse:
     return FileResponse(str(WEB_DIR / "index.html"))
 
