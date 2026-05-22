@@ -5,7 +5,10 @@ Run:
 """
 from __future__ import annotations
 
+import os
 import re
+import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -623,6 +626,34 @@ def update_reference(item_id: int, body: ReferenceUpdate) -> TestItem:
 # ===========================================================================
 if (WEB_DIR / "assets").exists():
     app.mount("/assets", StaticFiles(directory=str(WEB_DIR / "assets")), name="assets")
+
+
+def _resolve_commit() -> str:
+    # Render exposes RENDER_GIT_COMMIT; locally we read from .git.
+    commit = os.environ.get("RENDER_GIT_COMMIT", "").strip()
+    if commit:
+        return commit
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(WEB_DIR.parent),
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+    except Exception:
+        return ""
+
+
+_GIT_COMMIT = _resolve_commit()
+_STARTED_AT = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+@app.get("/version", include_in_schema=False)
+def version() -> dict:
+    return {
+        "commit": _GIT_COMMIT,
+        "commit_short": _GIT_COMMIT[:7] if _GIT_COMMIT else "",
+        "deployed_at": _STARTED_AT,
+    }
 
 
 @app.get("/", include_in_schema=False)
