@@ -2,7 +2,8 @@
  *
  * Exposes a single global `Profile` object:
  *   Profile.init({onChange})  → fetches /profiles, restores choice from
- *                                localStorage, paints the switcher.
+ *                                localStorage (with cookie as fallback),
+ *                                paints the switcher.
  *   Profile.current()         → current slug
  *   Profile.list()            → full list of profiles
  *   Profile.set(slug)         → switch and fire onChange
@@ -13,6 +14,33 @@
 
 (function () {
   const STORAGE_KEY = "ydocter-profile";
+  const COOKIE_KEY  = "ydocter_profile";
+  // 1 year — long enough that returning visitors never lose their pick,
+  // short enough that abandoned slugs eventually self-expire.
+  const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+
+  // Belt + suspenders: localStorage is the primary store, cookie is a
+  // backup that survives localStorage being cleared (private mode, quota
+  // eviction, "clear site data") and is also readable by the server in
+  // the future if we ever want SSR-side default selection.
+  function readCookie() {
+    const m = document.cookie.match(
+      new RegExp("(?:^|; )" + COOKIE_KEY + "=([^;]*)")
+    );
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+  function writeCookie(slug) {
+    document.cookie =
+      `${COOKIE_KEY}=${encodeURIComponent(slug)}` +
+      `; Max-Age=${COOKIE_MAX_AGE}; Path=/; SameSite=Lax`;
+  }
+  function readStored() {
+    try { return localStorage.getItem(STORAGE_KEY); } catch (e) { return null; }
+  }
+  function writeStored(slug) {
+    try { localStorage.setItem(STORAGE_KEY, slug); } catch (e) { /* private mode */ }
+    writeCookie(slug);
+  }
 
   const state = {
     profiles: [],
@@ -26,12 +54,12 @@
     if (!res.ok) throw new Error(`failed to load profiles (${res.status})`);
     state.profiles = await res.json();
 
-    const stored = localStorage.getItem(STORAGE_KEY);
+    // Prefer localStorage (fast, no header overhead). Fall back to the
+    // cookie when localStorage was wiped but the cookie still survives.
+    const stored = readStored() || readCookie();
     const valid = state.profiles.some((p) => p.slug === stored);
     state.current = valid ? stored : (state.profiles[0]?.slug ?? null);
-    if (state.current && state.current !== stored) {
-      localStorage.setItem(STORAGE_KEY, state.current);
-    }
+    if (state.current) writeStored(state.current);
 
     render();
     bind();
@@ -45,7 +73,7 @@
     const found = state.profiles.find((p) => p.slug === slug);
     if (!found) return;
     state.current = slug;
-    localStorage.setItem(STORAGE_KEY, slug);
+    writeStored(slug);
     render();
     state.onChange();
   }
