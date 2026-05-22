@@ -1,12 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="ydocter">
   <title>ydocter</title>
-  <!-- Off-white background to stay readable on dark and light browser chrome -->
-  <rect width="32" height="32" rx="4" fill="#F2F1ED"/>
+  <!-- Transparent background — favicon floats on whatever browser chrome
+       sits behind it. The home-screen counterpart is a separate PNG so
+       iOS can fill its own backdrop. -->
   <!-- 'yd' wordmark in the same red used by the in-page brand-mark.
        Newsreader is preferred but ships only via Google Fonts, so fall
        back to widely-installed serifs for the favicon. -->
   <text
-    x="16" y="24"
+    x="13" y="24"
     font-family="Newsreader, 'Source Serif Pro', Georgia, 'Times New Roman', serif"
     font-weight="500"
     font-size="22"
@@ -14,4 +15,11 @@
     text-anchor="middle"
     letter-spacing="-1.2"
   >yd</text>
+  <!-- Hospital-cross '+' raised to upper-right as a superscript so the
+       wordmark reads 'yd⁺' — clinical/medical tone without overpowering
+       the serif. -->
+  <g fill="#B83227" transform="translate(25.5, 10)">
+    <rect x="-3"    y="-0.85" width="6"   height="1.7" rx="0.35"/>
+    <rect x="-0.85" y="-3"    width="1.7" height="6"   rx="0.35"/>
+  </g>
 </svg>
