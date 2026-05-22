@@ -118,6 +118,18 @@ class _Cursor:
         return _Row(self._cols(), row)
 
 
+def _is_hrana_stream_error(exc: BaseException) -> bool:
+    """True for Turso Hrana 404 `stream not found` errors.
+
+    Why: Turso GCs idle Hrana streams server-side. Our thread-local libsql
+    connection doesn't know, so the next ``execute`` surfaces a ValueError
+    like ``Hrana: api error: status=404 ... stream not found``. We treat
+    this as a signal to reconnect transparently.
+    """
+    msg = str(exc)
+    return "Hrana" in msg and "stream not found" in msg
+
+
 class _Connection:
     """Thin adapter exposing the sqlite3.Connection methods we use."""
 
@@ -129,7 +141,13 @@ class _Connection:
         # sequences with `TypeError: argument 'parameters': 'list' object
         # cannot be converted to 'PyTuple'`. sqlite3 accepts either, so a
         # blanket coercion here keeps callers free to use either.
-        return _Cursor(self._conn.execute(sql, tuple(params)))
+        try:
+            return _Cursor(self._conn.execute(sql, tuple(params)))
+        except ValueError as exc:
+            if not _is_hrana_stream_error(exc):
+                raise
+            self._reconnect()
+            return _Cursor(self._conn.execute(sql, tuple(params)))
 
     def executescript(self, script: str):
         return self._conn.executescript(script)
@@ -139,6 +157,20 @@ class _Connection:
 
     def close(self):
         return self._conn.close()
+
+    def _reconnect(self) -> None:
+        """Drop the dead native conn and open a fresh one in place.
+
+        Keeps the wrapper identity stable so the thread-local cache in
+        :func:`_get_cached_conn` stays valid.
+        """
+        import libsql_experimental as libsql
+
+        try:
+            self._conn.close()
+        except Exception:
+            pass
+        self._conn = libsql.connect(TURSO_URL, auth_token=TURSO_TOKEN)
 
     def __enter__(self):
         return self

@@ -10,6 +10,7 @@ const state = {
   items: [],                // raw list from /items
   byItem: new Map(),        // item_id -> { item, points: Map(year -> measurement) }
   latestYear: 2025,         // recomputed after load
+  watchYears: [],           // 3 most-recent measured years; computed once at load
   filter: { major: null, search: "" },
   activeItemId: null,
   layout: null,             // current viewport-dependent layout (see computeLayout)
@@ -96,6 +97,9 @@ async function reload() {
   });
   state.latestYear =
     measurements.reduce((a, b) => Math.max(a, b.year), 0) || 2025;
+  state.watchYears = [...new Set(measurements.map((m) => m.year))]
+    .sort((a, b) => b - a)
+    .slice(0, 3);
 
   renderRail();
   renderHeadlines();
@@ -148,14 +152,10 @@ function renderHeadlines() {
   document.getElementById("count-total").textContent    = state.items.length;
 
   /* watch list: indicators that have been HIGH or LOW in 2+ of the
-     last three measured years */
-  const recent = [2025, 2024, 2023, 2021].filter((yr) =>
-    [...state.byItem.values()].some((e) => e.points.has(yr)),
-  ).slice(0, 3);
-
+     last three measured years (computed once at load — state.watchYears) */
   const watch = [];
   for (const [id, e] of state.byItem) {
-    const offenses = recent
+    const offenses = state.watchYears
       .map((yr) => e.points.get(yr))
       .filter((m) => m && (m.status === "HIGH" || m.status === "LOW"));
     if (offenses.length >= 2) {
@@ -170,7 +170,7 @@ function renderHeadlines() {
 
   const watchEl = document.getElementById("watchlist");
   watchEl.innerHTML = "";
-  watch.slice(0, 4).forEach((w) => {
+  watch.forEach((w) => {
     const li = document.createElement("li");
     const statusClass = w.last?.status === "LOW" ? "value--low" : "value--high";
     li.innerHTML = `
