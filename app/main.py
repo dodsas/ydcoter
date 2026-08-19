@@ -702,3 +702,8 @@ def settings_page() -> HTMLResponse:
 @app.get("/nutrition", include_in_schema=False)
 def nutrition_page() -> HTMLResponse:
     return _render_html("nutrition.html")
+
+
+@app.get("/body", include_in_schema=False)
+def body_page() -> HTMLResponse:
+    return _render_html("body.html")
