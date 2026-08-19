@@ -24,11 +24,14 @@ from app.database import (
     connect,
     get_conn,
     get_local_conn,
+    init_body_schema,
     init_health_schema,
     init_nutrition_schema,
     using_turso,
 )
 from app.models import (
+    BodyRecord,
+    BodyRecordIn,
     DailyNutrition,
     Measurement,
     NutrientTotal,
@@ -61,7 +64,7 @@ app.add_middleware(
         "http://127.0.0.1:8000",
     ],
     allow_credentials=True,
-    allow_methods=["GET", "PATCH", "POST"],
+    allow_methods=["GET", "PATCH", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -76,12 +79,19 @@ def _ensure_schema() -> None:
             init_health_schema(conn)
             if not using_turso():
                 init_nutrition_schema(conn)
+                init_body_schema(conn)
+    elif not using_turso():
+        # Existing local DB in dev-fallback: body_records may not exist yet
+        # (feature added after the DB was created) — idempotent, cheap.
+        with get_local_conn() as conn:
+            init_body_schema(conn)
 
     # Turso: idempotent — `CREATE TABLE IF NOT EXISTS` is cheap and keeps
-    # the prod schema in sync with whatever ships in sql/schema-nutrition.sql.
+    # the prod schema in sync with whatever ships in sql/schema-*.sql.
     if using_turso():
         with get_conn() as conn:
             init_nutrition_schema(conn)
+            init_body_schema(conn)
 
 
 # ===========================================================================
@@ -576,6 +586,78 @@ def list_nutrients() -> List[NutrientTotal]:
             """
         ).fetchall()
     return [NutrientTotal(**dict(r)) for r in rows]
+
+
+# ===========================================================================
+# Body measurements (Navy-method tracker, /body page)
+# ===========================================================================
+
+_BODY_COLS = (
+    "sex", "height_cm", "weight_kg", "neck_cm", "waist_cm",
+    "hip_cm", "chest_cm", "arm_cm", "shoulder_cm", "thigh_cm",
+)
+
+
+@app.get("/body/records", response_model=List[BodyRecord])
+def body_records(profile: Optional[str] = Query(None)) -> List[BodyRecord]:
+    """All circumference records for a profile, oldest first (Day 0 first)."""
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT record_date, {", ".join(_BODY_COLS)}
+            FROM body_records
+            WHERE profile_id = ?
+            ORDER BY record_date
+            """,
+            (pid,),
+        ).fetchall()
+    return [BodyRecord(**dict(r)) for r in rows]
+
+
+@app.put("/body/records/{record_date}", response_model=BodyRecord)
+def body_record_upsert(
+    record_date: str,
+    body: BodyRecordIn,
+    profile: Optional[str] = Query(None),
+) -> BodyRecord:
+    """Insert or replace the record for one date (date = natural key)."""
+    if not _DATE_RE.match(record_date):
+        raise HTTPException(422, "record_date must be ISO YYYY-MM-DD")
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
+    values = [getattr(body, c) for c in _BODY_COLS]
+    with get_conn() as conn:
+        conn.execute(
+            f"""
+            INSERT INTO body_records (profile_id, record_date, {", ".join(_BODY_COLS)})
+            VALUES ({", ".join("?" * (2 + len(_BODY_COLS)))})
+            ON CONFLICT (profile_id, record_date) DO UPDATE SET
+                {", ".join(f"{c} = excluded.{c}" for c in _BODY_COLS)}
+            """,
+            tuple([pid, record_date, *values]),
+        )
+        conn.commit()
+    return BodyRecord(record_date=record_date, **body.model_dump())
+
+
+@app.delete("/body/records/{record_date}")
+def body_record_delete(
+    record_date: str,
+    profile: Optional[str] = Query(None),
+) -> dict:
+    if not _DATE_RE.match(record_date):
+        raise HTTPException(422, "record_date must be ISO YYYY-MM-DD")
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
+    with get_conn() as conn:
+        conn.execute(
+            "DELETE FROM body_records WHERE profile_id = ? AND record_date = ?",
+            (pid, record_date),
+        )
+        conn.commit()
+    return {"ok": True, "record_date": record_date}
 
 
 # ===========================================================================

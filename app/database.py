@@ -35,6 +35,7 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parent.parent
 HEALTH_SCHEMA_PATH    = ROOT / "sql" / "schema-health.sql"
 NUTRITION_SCHEMA_PATH = ROOT / "sql" / "schema-nutrition.sql"
+BODY_SCHEMA_PATH      = ROOT / "sql" / "schema-body.sql"
 
 # Load the local .env *before* reading any env var. `app.config` also does
 # this, but `app.load_data` imports us without going through config, so we
@@ -243,6 +244,12 @@ def init_nutrition_schema(conn) -> None:
     profile_nutrient_rda. Applied to Turso in prod, or to local in
     dev-fallback mode."""
     _apply_schema(conn, NUTRITION_SCHEMA_PATH)
+
+
+def init_body_schema(conn) -> None:
+    """Body-measurement schema: body_records. Applied to Turso in prod,
+    or to local in dev-fallback mode (same split as nutrition)."""
+    _apply_schema(conn, BODY_SCHEMA_PATH)
 
 
 def _split_sql(script: str) -> list[str]:

@@ -366,7 +366,7 @@
     <strong>계산식</strong> — 체지방률(남): 495 ÷ [1.0324 − 0.19077·log₁₀(허리−목) + 0.15456·log₁₀(키)] − 450 ·
     체지방률(여): 495 ÷ [1.29579 − 0.35004·log₁₀(허리+엉덩이−목) + 0.22100·log₁₀(키)] − 450 ·
     제지방량 = 체중 × (1 − 체지방률) · FFMI = 제지방량 ÷ 키²(m) — 목표 <strong>FFMI 22</strong>.
-    데이터는 이 브라우저의 localStorage에만 저장됩니다. 기기 변경 전 JSON 내보내기를 해두세요.
+    기록은 서버 DB(프로필별)에 저장되어 어느 기기에서든 동일하게 보입니다. JSON 내보내기는 백업용입니다.
   </div>
 
 </div>
@@ -375,11 +375,49 @@
 
 <script>
 "use strict";
-/* ───────────────────────── 저장소 ───────────────────────── */
-const KEY = "bodylog.v1";
-const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || { records: [] }; } catch { return { records: [] }; } };
-const save = (db) => localStorage.setItem(KEY, JSON.stringify(db));
-let db = load();
+/* ───────────────────────── 저장소 (서버 DB) ─────────────────
+   기록은 /body/records API(→ Turso/SQLite)에 저장. localStorage는
+   UI 편의값(키·성별)과 구버전 데이터 마이그레이션에만 사용. */
+const LEGACY_KEY = "bodylog.v1";
+const PREFS_KEY  = "bodylog.prefs";
+// 다른 페이지(영양/대시보드)에서 고른 프로필을 그대로 따라간다.
+const PROFILE_SLUG = (() => { try { return localStorage.getItem("ydocter-profile") || ""; } catch { return ""; } })();
+const Q = PROFILE_SLUG ? `?profile=${encodeURIComponent(PROFILE_SLUG)}` : "";
+
+let db = { records: [] };
+const prefs = (() => { try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; } catch { return {}; } })();
+const savePrefs = () => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch {} };
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try { const j = await res.json(); if (j.detail) msg = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail); } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+const FIELD2WIRE = {
+  weight: "weight_kg", height: "height_cm", neck: "neck_cm", waist: "waist_cm",
+  hip: "hip_cm", chest: "chest_cm", arm: "arm_cm", shoulder: "shoulder_cm", thigh: "thigh_cm",
+};
+function fromWire(w) {
+  const r = { id: w.record_date, date: w.record_date, sex: w.sex };
+  for (const [f, k] of Object.entries(FIELD2WIRE)) r[f] = w[k];
+  return r;
+}
+function toWire(f) {
+  const w = { sex: f.sex || "m" };
+  for (const [field, k] of Object.entries(FIELD2WIRE)) w[k] = f[field] ?? null;
+  return w;
+}
+async function reloadRecords() {
+  db.records = (await api(`/body/records${Q}`)).map(fromWire);
+}
+const putRecord = (date, f) => api(`/body/records/${date}${Q}`, {
+  method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toWire(f)),
+});
+const deleteRecordApi = (date) => api(`/body/records/${date}${Q}`, { method: "DELETE" });
 
 /* ───────────────────────── 계산 ─────────────────────────── */
 function bodyFat(sex, h, neck, waist, hip) {
@@ -545,12 +583,15 @@ function renderTable() {
       <td><button class="del" data-id="${r.id}" title="삭제">✕</button></td>
     </tr>`;
   }).join("");
-  tb.querySelectorAll(".del").forEach(b => b.addEventListener("click", e => {
+  tb.querySelectorAll(".del").forEach(b => b.addEventListener("click", async e => {
     e.stopPropagation();
     if (!confirm("이 기록을 삭제할까요?")) return;
     if (b.dataset.id === editingId) cancelEdit();
-    db.records = db.records.filter(r => r.id !== b.dataset.id);
-    save(db); renderAll();
+    try {
+      await deleteRecordApi(b.dataset.id);
+      await reloadRecords();
+    } catch (err) { alert("삭제 실패: " + err.message); return; }
+    renderAll();
   }));
   tb.querySelectorAll("tr[data-id]").forEach(tr => tr.addEventListener("click", () => {
     const rec = db.records.find(r => r.id === tr.dataset.id);
@@ -708,19 +749,21 @@ function updatePreview() {
 inputs.forEach(i => i && i.addEventListener("input", updatePreview));
 $("in-sex").addEventListener("change", updatePreview);
 
-$("btn-save").addEventListener("click", () => {
+$("btn-save").addEventListener("click", async () => {
   const f = readForm();
   if (!f.date) return alert("날짜를 입력하세요.");
   if (!f.weight || !f.height || !f.neck || !f.waist) return alert("체중·키·목·허리는 필수입니다.");
   if (f.sex === "f" && !f.hip) return alert("여성 공식에는 엉덩이 둘레가 필요합니다.");
-  // 편집 중인 기록 자신은 중복으로 치지 않음
+  // 편집 중인 기록 자신은 중복으로 치지 않음 (id = 날짜)
   const existing = db.records.find(r => r.date === f.date && r.id !== editingId);
   if (existing && !confirm(`${f.date} 기록이 이미 있습니다. 덮어쓸까요?`)) return;
-  const id = editingId ?? (f.date + "-" + Math.floor(performance.now()));
-  db.records = db.records.filter(r => r.date !== f.date && r.id !== editingId);
-  db.records.push({ id, ...f });
-  db.lastHeight = f.height; db.lastSex = f.sex;
-  save(db);
+  try {
+    await putRecord(f.date, f);
+    // 편집 중 날짜를 바꾼 경우: 기존 날짜의 기록을 제거해 이동으로 처리
+    if (editingId && editingId !== f.date) await deleteRecordApi(editingId);
+    await reloadRecords();
+  } catch (err) { alert("저장 실패: " + err.message); return; }
+  prefs.lastHeight = f.height; prefs.lastSex = f.sex; savePrefs();
   if (editingId) {
     cancelEdit();
   } else {
@@ -749,15 +792,22 @@ $("btn-import").addEventListener("click", () => $("file-import").click());
 $("file-import").addEventListener("change", e => {
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
+    let records;
     try {
       const data = JSON.parse(reader.result);
       if (!Array.isArray(data.records)) throw 0;
-      if (!confirm(`${data.records.length}건을 불러옵니다. 같은 날짜는 덮어씁니다. 진행할까요?`)) return;
-      const dates = new Set(data.records.map(r => r.date));
-      db.records = [...db.records.filter(r => !dates.has(r.date)), ...data.records];
-      save(db); renderAll();
-    } catch { alert("올바른 백업 파일이 아닙니다."); }
+      records = data.records.filter(r => r.date && r.weight && r.height && r.neck && r.waist);
+    } catch { alert("올바른 백업 파일이 아닙니다."); return; }
+    if (!records.length) return alert("가져올 수 있는 기록이 없습니다.");
+    if (!confirm(`${records.length}건을 서버 DB에 저장합니다. 같은 날짜는 덮어씁니다. 진행할까요?`)) return;
+    let ok = 0, fail = 0;
+    for (const r of records) {
+      try { await putRecord(r.date, r); ok++; } catch { fail++; }
+    }
+    await reloadRecords().catch(() => {});
+    renderAll();
+    alert(`가져오기 완료: ${ok}건 저장${fail ? `, ${fail}건 실패` : ""}`);
   };
   reader.readAsText(file);
   e.target.value = "";
@@ -765,12 +815,46 @@ $("file-import").addEventListener("change", e => {
 
 /* ───────────────────────── 초기화 ───────────────────────── */
 function renderAll() { renderTiles(); renderVerdict(); renderCharts(); renderTable(); }
-(function init() {
+
+/* 구버전(localStorage) 기록 → 서버 DB 1회 마이그레이션 */
+async function migrateLegacy() {
+  let legacy = null;
+  try { legacy = JSON.parse(localStorage.getItem(LEGACY_KEY)); } catch {}
+  if (!legacy || !Array.isArray(legacy.records) || !legacy.records.length) return;
+  if (prefs.lastHeight == null && legacy.lastHeight != null) { prefs.lastHeight = legacy.lastHeight; prefs.lastSex = legacy.lastSex; savePrefs(); }
+  if (prefs.migrationDeclined) return;
+  const candidates = legacy.records.filter(r =>
+    r.date && r.weight && r.height && r.neck && r.waist &&
+    !db.records.some(s => s.date === r.date));
+  if (!candidates.length) return;
+  if (!confirm(`이 브라우저에 저장돼 있던 기존 기록 ${candidates.length}건을 서버 DB로 옮길까요?`)) {
+    prefs.migrationDeclined = true; savePrefs(); return;
+  }
+  for (const r of candidates) { try { await putRecord(r.date, r); } catch {} }
+  // 원본은 .bak으로 이동해 재실행 방지 (백업은 유지)
+  try {
+    localStorage.setItem(LEGACY_KEY + ".bak", JSON.stringify(legacy));
+    localStorage.removeItem(LEGACY_KEY);
+  } catch {}
+  await reloadRecords();
+}
+
+(async function init() {
   const today = new Date();
   $("in-date").value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
-  $("in-height").value = db.lastHeight ?? 187;
-  $("in-sex").value = db.lastSex ?? "m";
+  $("in-height").value = prefs.lastHeight ?? 187;
+  $("in-sex").value = prefs.lastSex ?? "m";
   updatePreview();
+  try {
+    await reloadRecords();
+    await migrateLegacy();
+  } catch (err) {
+    const box = document.getElementById("verdict-box");
+    box.style.display = "flex";
+    box.className = "verdict serious";
+    box.innerHTML = `<div class="icon">✕</div><div><h3>서버 연결 실패</h3><p>기록을 불러오지 못했습니다 (${err.message}). 서버 상태 확인 후 새로고침하세요.</p></div>`;
+    return;
+  }
   renderAll();
 })();
 </script>

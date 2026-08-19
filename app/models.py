@@ -144,3 +144,36 @@ class ReferenceUpdate(BaseModel):
         ):
             raise ValueError("ref_min must be ≤ ref_max")
         return self
+
+
+class BodyRecordIn(BaseModel):
+    """Upsert payload for one day's body-circumference measurement.
+
+    Body fat % / lean mass / FFMI are derived client-side (Navy method)
+    and intentionally not stored.
+    """
+
+    sex: str = "m"  # 'm' | 'f' — female formula additionally needs hip_cm
+    height_cm: float
+    weight_kg: float
+    neck_cm: float
+    waist_cm: float
+    hip_cm: Optional[float] = None
+    chest_cm: Optional[float] = None
+    arm_cm: Optional[float] = None
+    shoulder_cm: Optional[float] = None
+    thigh_cm: Optional[float] = None
+
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _check(self):
+        if self.sex not in ("m", "f"):
+            raise ValueError("sex must be 'm' or 'f'")
+        if self.sex == "f" and self.hip_cm is None:
+            raise ValueError("hip_cm is required for the female formula")
+        return self
+
+
+class BodyRecord(BodyRecordIn):
+    record_date: str
