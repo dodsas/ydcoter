@@ -177,3 +177,45 @@ class BodyRecordIn(BaseModel):
 
 class BodyRecord(BodyRecordIn):
     record_date: str
+
+
+class WorkoutSet(BaseModel):
+    """One set of one exercise within a session."""
+
+    exercise: str  # slug: legpress, chestpress, latpulldown, ...
+    set_no: int
+    weight_kg: Optional[float] = None
+    reps: Optional[int] = None
+
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _check(self):
+        if not self.exercise.strip():
+            raise ValueError("exercise must not be empty")
+        if not 1 <= self.set_no <= 10:
+            raise ValueError("set_no must be 1..10")
+        return self
+
+
+class WorkoutSessionIn(BaseModel):
+    """Upsert payload for one training session (date = natural key)."""
+
+    phase: int = 1  # 1: 머신 5종 적응기, 2: 7종 전신
+    discomfort: Optional[int] = None  # 세션 후 허리 불편감 0~10
+    note: Optional[str] = None
+    sets: List[WorkoutSet] = []
+
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _check(self):
+        if self.phase not in (1, 2):
+            raise ValueError("phase must be 1 or 2")
+        if self.discomfort is not None and not 0 <= self.discomfort <= 10:
+            raise ValueError("discomfort must be 0..10")
+        return self
+
+
+class WorkoutSession(WorkoutSessionIn):
+    session_date: str

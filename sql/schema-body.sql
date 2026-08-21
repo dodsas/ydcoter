@@ -38,3 +38,29 @@ CREATE TABLE IF NOT EXISTS body_records (
 );
 
 CREATE INDEX IF NOT EXISTS idx_body_profile_date ON body_records(profile_id, record_date);
+
+-- Workout sessions (/workout page) — one session per profile+date,
+-- sets stored relationally so per-exercise progression is queryable.
+CREATE TABLE IF NOT EXISTS workout_sessions (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id    INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    session_date  TEXT    NOT NULL,               -- ISO YYYY-MM-DD
+    phase         INTEGER NOT NULL DEFAULT 1,     -- 1: 머신 5종 적응기, 2: 7종 전신
+    discomfort    INTEGER,                        -- 세션 후 허리 불편감 0~10
+    note          TEXT,
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (profile_id, session_date)
+);
+
+CREATE TABLE IF NOT EXISTS workout_sets (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id  INTEGER NOT NULL REFERENCES workout_sessions(id) ON DELETE CASCADE,
+    exercise    TEXT    NOT NULL,                 -- slug: legpress, chestpress, ...
+    set_no      INTEGER NOT NULL,                 -- 1..n
+    weight_kg   REAL,
+    reps        INTEGER,
+    UNIQUE (session_id, exercise, set_no)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wsession_profile_date ON workout_sessions(profile_id, session_date);
+CREATE INDEX IF NOT EXISTS idx_wsets_session          ON workout_sets(session_id);

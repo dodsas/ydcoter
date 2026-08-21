@@ -45,6 +45,9 @@ from app.models import (
     TestItem,
     Trend,
     TrendPoint,
+    WorkoutSession,
+    WorkoutSessionIn,
+    WorkoutSet,
 )
 from app.nutrition_parser import parse_food_text
 from app.yclaude_client import YClaudeError
@@ -661,6 +664,122 @@ def body_record_delete(
 
 
 # ===========================================================================
+# Workout sessions (machine program tracker, /workout page)
+# ===========================================================================
+
+
+@app.get("/workout/sessions", response_model=List[WorkoutSession])
+def workout_sessions(profile: Optional[str] = Query(None)) -> List[WorkoutSession]:
+    """All training sessions with their sets, oldest first."""
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
+    with get_conn() as conn:
+        srows = conn.execute(
+            """
+            SELECT id, session_date, phase, discomfort, note
+            FROM workout_sessions
+            WHERE profile_id = ?
+            ORDER BY session_date
+            """,
+            (pid,),
+        ).fetchall()
+        sets_by_session: dict[int, list[WorkoutSet]] = {}
+        if srows:
+            trows = conn.execute(
+                """
+                SELECT t.session_id, t.exercise, t.set_no, t.weight_kg, t.reps
+                FROM workout_sets t
+                JOIN workout_sessions s ON s.id = t.session_id
+                WHERE s.profile_id = ?
+                ORDER BY t.session_id, t.id
+                """,
+                (pid,),
+            ).fetchall()
+            for t in trows:
+                sets_by_session.setdefault(t["session_id"], []).append(
+                    WorkoutSet(
+                        exercise=t["exercise"],
+                        set_no=t["set_no"],
+                        weight_kg=t["weight_kg"],
+                        reps=t["reps"],
+                    )
+                )
+    return [
+        WorkoutSession(
+            session_date=s["session_date"],
+            phase=s["phase"],
+            discomfort=s["discomfort"],
+            note=s["note"],
+            sets=sets_by_session.get(s["id"], []),
+        )
+        for s in srows
+    ]
+
+
+@app.put("/workout/sessions/{session_date}", response_model=WorkoutSession)
+def workout_session_upsert(
+    session_date: str,
+    body: WorkoutSessionIn,
+    profile: Optional[str] = Query(None),
+) -> WorkoutSession:
+    """Insert or replace the session for one date; sets are replaced wholesale."""
+    if not _DATE_RE.match(session_date):
+        raise HTTPException(422, "session_date must be ISO YYYY-MM-DD")
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO workout_sessions (profile_id, session_date, phase, discomfort, note)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (profile_id, session_date) DO UPDATE SET
+                phase = excluded.phase,
+                discomfort = excluded.discomfort,
+                note = excluded.note
+            """,
+            (pid, session_date, body.phase, body.discomfort, body.note),
+        )
+        sid = conn.execute(
+            "SELECT id FROM workout_sessions WHERE profile_id = ? AND session_date = ?",
+            (pid, session_date),
+        ).fetchone()["id"]
+        conn.execute("DELETE FROM workout_sets WHERE session_id = ?", (sid,))
+        for s in body.sets:
+            conn.execute(
+                """
+                INSERT INTO workout_sets (session_id, exercise, set_no, weight_kg, reps)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (sid, s.exercise, s.set_no, s.weight_kg, s.reps),
+            )
+        conn.commit()
+    return WorkoutSession(session_date=session_date, **body.model_dump())
+
+
+@app.delete("/workout/sessions/{session_date}")
+def workout_session_delete(
+    session_date: str,
+    profile: Optional[str] = Query(None),
+) -> dict:
+    if not _DATE_RE.match(session_date):
+        raise HTTPException(422, "session_date must be ISO YYYY-MM-DD")
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM workout_sessions WHERE profile_id = ? AND session_date = ?",
+            (pid, session_date),
+        ).fetchone()
+        if row:
+            # explicit set delete — FK cascade needs PRAGMA foreign_keys,
+            # which the Turso path doesn't guarantee
+            conn.execute("DELETE FROM workout_sets WHERE session_id = ?", (row["id"],))
+            conn.execute("DELETE FROM workout_sessions WHERE id = ?", (row["id"],))
+            conn.commit()
+    return {"ok": True, "session_date": session_date}
+
+
+# ===========================================================================
 # Reference editing
 # ===========================================================================
 
@@ -789,3 +908,8 @@ def nutrition_page() -> HTMLResponse:
 @app.get("/body", include_in_schema=False)
 def body_page() -> HTMLResponse:
     return _render_html("body.html")
+
+
+@app.get("/workout", include_in_schema=False)
+def workout_page() -> HTMLResponse:
+    return _render_html("workout.html")

@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WORKOUT — 머신 전신 프로그램 기록</title>
+<link rel="icon" type="image/svg+xml" href="/assets/doctor.svg?v={{V}}" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ─── 팔레트 (body.html과 동일한 검증된 다크 스텝) ─────── */
+  :root {
+    color-scheme: dark;
+    --page:        #0d0d0d;
+    --surface-1:   #1a1a19;
+    --surface-2:   #222220;
+    --ink:         #ffffff;
+    --ink-2:       #c3c2b7;
+    --muted:       #898781;
+    --grid:        #2c2c2a;
+    --baseline:    #383835;
+    --border:      rgba(255,255,255,0.10);
+    --series-1:    #3987e5;
+    --series-2:    #d95926;   /* 운동 페이지 강조색: 오렌지 */
+    --good:        #0ca30c;
+    --warning:     #fab219;
+    --serious:     #ec835a;
+    --critical:    #d03b3b;
+    --delta-up:    #0ca30c;
+
+    --font-display: 'Anton', 'IBM Plex Sans KR', sans-serif;
+    --font-body:    'IBM Plex Sans KR', 'Apple SD Gothic Neo', sans-serif;
+    --font-mono:    'IBM Plex Mono', 'SF Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.6;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+    background-size: 48px 48px;
+    min-height: 100vh;
+  }
+
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    flex-wrap: wrap; gap: 16px;
+    border-bottom: 3px solid var(--ink);
+    padding-bottom: 18px; margin-bottom: 28px;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-size: clamp(40px, 7vw, 64px);
+    line-height: 0.95; letter-spacing: 0.01em;
+    text-transform: uppercase;
+  }
+  h1 .accent { color: var(--series-2); }
+  .header-meta {
+    text-align: right; color: var(--muted); font-size: 12px;
+    font-family: var(--font-mono);
+  }
+  .header-meta strong { color: var(--ink-2); font-weight: 500; }
+  .header-meta a { text-decoration: none; }
+
+  .sec-label {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--muted);
+    display: flex; align-items: center; gap: 10px;
+    margin: 36px 0 14px;
+  }
+  .sec-label::before { content: ""; width: 22px; height: 2px; background: var(--series-2); }
+  .sec-label .n { color: var(--series-2); }
+
+  /* 판정 배너 */
+  .verdict {
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--muted);
+    background: var(--surface-1);
+    padding: 16px 20px; margin-bottom: 8px;
+    display: flex; gap: 14px; align-items: flex-start;
+  }
+  .verdict .icon { font-size: 20px; line-height: 1.3; }
+  .verdict h3 { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+  .verdict p { color: var(--ink-2); font-size: 13px; }
+  .verdict.good     { border-left-color: var(--good); }     .verdict.good h3     { color: var(--good); }
+  .verdict.warning  { border-left-color: var(--warning); }  .verdict.warning h3  { color: var(--warning); }
+  .verdict.serious  { border-left-color: var(--serious); }  .verdict.serious h3  { color: var(--serious); }
+
+  /* 스탯 타일 */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  .tile {
+    background: var(--surface-1); border: 1px solid var(--border);
+    padding: 16px 18px 14px; position: relative; overflow: hidden;
+  }
+  .tile .label { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-family: var(--font-mono); }
+  .tile .value { font-family: var(--font-display); font-size: 42px; line-height: 1.1; margin-top: 4px; }
+  .tile .unit { font-family: var(--font-body); font-size: 15px; color: var(--muted); font-weight: 400; margin-left: 2px; }
+  .tile .sub { font-size: 12px; color: var(--ink-2); margin-top: 2px; min-height: 18px; }
+  .tile .sub .up { color: var(--delta-up); font-weight: 600; }
+  .tile .bar { height: 4px; background: var(--baseline); margin-top: 10px; }
+  .tile .bar > div { height: 100%; background: var(--series-2); transition: width .6s cubic-bezier(.2,.8,.2,1); }
+
+  /* 입력 폼 */
+  .entry {
+    background: var(--surface-1); border: 1px solid var(--border);
+    padding: 22px; transition: border-color .2s;
+  }
+  .entry.editing { border-color: var(--series-2); }
+  .edit-badge {
+    display: none; font-family: var(--font-mono); font-size: 11px;
+    color: var(--series-2); border: 1px solid var(--series-2);
+    padding: 2px 8px; letter-spacing: 0.08em; vertical-align: middle;
+  }
+  .entry-top {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px; margin-bottom: 18px;
+  }
+  .field label {
+    display: block; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); font-family: var(--font-mono); margin-bottom: 5px;
+  }
+  .field input, .field select {
+    width: 100%; background: var(--page); color: var(--ink);
+    border: 1px solid var(--baseline); padding: 9px 10px;
+    font-family: var(--font-mono); font-size: 14px;
+    border-radius: 0; transition: border-color .15s;
+  }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--series-2); }
+
+  /* 종목 행 */
+  .ex-row {
+    border-top: 1px dashed var(--baseline);
+    padding: 13px 0;
+    display: grid; grid-template-columns: minmax(230px, 1fr) auto;
+    gap: 8px 18px; align-items: center;
+  }
+  .ex-row:last-of-type { border-bottom: 1px dashed var(--baseline); }
+  .ex-info .ex-name { font-weight: 700; font-size: 14px; }
+  .ex-info .ex-no { font-family: var(--font-mono); color: var(--series-2); font-size: 12px; margin-right: 6px; }
+  .ex-info .ex-target { font-family: var(--font-mono); color: var(--muted); font-size: 11.5px; margin-left: 8px; }
+  .ex-info .ex-note { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+  .ex-last { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-2); margin-top: 3px; }
+  .ex-last .lbl { color: var(--muted); }
+  .ex-hint {
+    display: inline-block; font-family: var(--font-mono); font-size: 11px;
+    color: var(--good); border: 1px solid var(--good);
+    padding: 1px 7px; margin-top: 5px;
+  }
+  .ex-sets { display: flex; gap: 10px; flex-wrap: wrap; }
+  .set-pair {
+    display: flex; align-items: center; gap: 4px;
+    background: var(--page); border: 1px solid var(--baseline); padding: 5px 8px;
+  }
+  .set-pair:focus-within { border-color: var(--series-2); }
+  .set-pair input {
+    background: none; border: none; color: var(--ink);
+    font-family: var(--font-mono); font-size: 14px; text-align: right;
+  }
+  .set-pair input:focus { outline: none; }
+  .set-pair .w { width: 52px; }
+  .set-pair .r { width: 34px; }
+  .set-pair .x { color: var(--muted); font-size: 11px; }
+  .set-pair .u { color: var(--muted); font-size: 10px; }
+
+  .entry-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 14px; margin-top: 18px; padding-top: 16px;
+    border-top: 1px dashed var(--baseline);
+  }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  button {
+    font-family: var(--font-body); font-weight: 700; font-size: 14px;
+    background: var(--series-2); color: #fff; border: none;
+    padding: 11px 28px; cursor: pointer; letter-spacing: 0.04em;
+    transition: transform .1s, filter .15s;
+  }
+  button:hover { filter: brightness(1.12); }
+  button:active { transform: translateY(1px); }
+  button.ghost {
+    background: transparent; color: var(--ink-2);
+    border: 1px solid var(--baseline); font-weight: 500; padding: 8px 16px; font-size: 12px;
+  }
+  button.ghost:hover { border-color: var(--muted); color: var(--ink); }
+
+  /* 차트 */
+  .charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+  .chart-card { background: var(--surface-1); border: 1px solid var(--border); padding: 14px 14px 8px; }
+  .chart-card h4 { font-size: 12px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.06em; }
+  .chart-card h4 .cur { float: right; font-family: var(--font-mono); font-weight: 600; color: var(--ink); }
+  .chart-card svg { display: block; width: 100%; height: 150px; margin-top: 6px; cursor: crosshair; }
+  .chart-card svg text { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); }
+  .empty-note {
+    color: var(--muted); font-size: 13px; padding: 26px;
+    border: 1px dashed var(--baseline); text-align: center;
+  }
+
+  #tooltip {
+    position: fixed; pointer-events: none; z-index: 50;
+    background: var(--surface-2); border: 1px solid var(--border);
+    padding: 7px 11px; font-family: var(--font-mono); font-size: 12px;
+    color: var(--ink); box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+    display: none; white-space: nowrap;
+  }
+  #tooltip .tt-date { color: var(--muted); font-size: 11px; }
+
+  /* 기록 테이블 */
+  .table-scroll { overflow-x: auto; border: 1px solid var(--border); background: var(--surface-1); }
+  table { border-collapse: collapse; width: 100%; min-width: 940px; }
+  th, td {
+    padding: 9px 11px; text-align: right;
+    font-family: var(--font-mono); font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    border-bottom: 1px solid var(--grid);
+    white-space: nowrap;
+  }
+  th {
+    font-family: var(--font-body); font-weight: 500; font-size: 11px;
+    color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase;
+    border-bottom: 2px solid var(--baseline);
+    position: sticky; top: 0; background: var(--surface-1);
+  }
+  td:first-child, th:first-child { text-align: left; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr[data-id] { cursor: pointer; }
+  tbody tr:hover { background: rgba(255,255,255,0.025); }
+  tbody tr.editing { background: rgba(217,89,38,0.08); box-shadow: inset 3px 0 0 var(--series-2); }
+  td .d { font-size: 10.5px; margin-left: 3px; }
+  td .d.up { color: var(--delta-up); }
+  td .d.down { color: var(--serious); }
+  td .del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 2px 6px; }
+  td .del:hover { color: var(--critical); }
+  .phase-badge {
+    font-size: 10px; font-family: var(--font-mono);
+    border: 1px solid var(--baseline); color: var(--ink-2); padding: 1px 5px;
+  }
+  .phase-badge.p2 { border-color: var(--series-2); color: var(--series-2); }
+  .disc-chip { font-family: var(--font-mono); font-size: 11px; padding: 1px 6px; border: 1px solid transparent; }
+  .disc-chip.ok      { color: var(--good);    border-color: var(--good); }
+  .disc-chip.watch   { color: var(--warning); border-color: var(--warning); }
+  .disc-chip.rollback{ color: var(--serious); border-color: var(--serious); }
+
+  /* 가이드 */
+  .guide { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; }
+  .guide-card { background: var(--surface-1); border: 1px solid var(--border); padding: 18px 20px; }
+  .guide-card h4 { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+  .guide-card h4 .tag { color: var(--series-2); font-family: var(--font-mono); font-size: 11px; margin-right: 6px; }
+  .guide-card ul { list-style: none; }
+  .guide-card li { font-size: 12.5px; color: var(--ink-2); padding-left: 14px; position: relative; margin-bottom: 5px; }
+  .guide-card li::before { content: "—"; position: absolute; left: 0; color: var(--muted); }
+  .guide-card li strong { color: var(--ink); font-weight: 500; }
+
+  .footnote { margin-top: 32px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--grid); padding-top: 16px; }
+  .footnote strong { color: var(--ink-2); font-weight: 500; }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  header, .verdict, .tiles, .entry, .charts, .table-scroll, .guide { animation: rise .5s cubic-bezier(.2,.8,.2,1) both; }
+  .verdict { animation-delay: .05s; } .tiles { animation-delay: .1s; }
+  .entry { animation-delay: .15s; } .charts { animation-delay: .2s; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Work<span class="accent">/</span>Out</h1>
+    <div class="header-meta">
+      머신 전신 · 주 3회 · 점진적 과부하<br>
+      <strong id="session-count">세션 0회</strong> · <span id="phase-label">1단계</span><br>
+      <a href="/body" style="color:var(--series-2)">← Body Log</a> ·
+      <a href="/" style="color:var(--muted)">ydocter</a>
+    </div>
+  </header>
+
+  <div id="verdict-box" class="verdict" style="display:none"></div>
+
+  <!-- 현재 상태 -->
+  <div class="sec-label"><span class="n">01</span> 현재 상태</div>
+  <div class="tiles" id="tiles">
+    <div class="empty-note" style="grid-column:1/-1">아직 세션 기록이 없습니다. 첫 세션이 <strong>1단계 Day 1</strong>이 됩니다.</div>
+  </div>
+
+  <!-- 세션 입력 -->
+  <div class="sec-label"><span class="n">02</span> 세션 기록 <span class="edit-badge" id="edit-badge"></span></div>
+  <div class="entry" id="entry">
+    <div class="entry-top">
+      <div class="field"><label>날짜</label><input type="date" id="in-date"></div>
+      <div class="field"><label>단계</label>
+        <select id="in-phase">
+          <option value="1">1단계 — 머신 5종 (3×10)</option>
+          <option value="2">2단계 — 7종 전신 (3×8~12)</option>
+        </select>
+      </div>
+      <div class="field" id="hinge-field" style="display:none"><label>힙 힌지 종목</label>
+        <select id="in-hinge">
+          <option value="backext">백 익스텐션 (4~6주차)</option>
+          <option value="rdl">덤벨 RDL (7주차~)</option>
+        </select>
+      </div>
+      <div class="field"><label>허리 불편감 (0~10)</label>
+        <select id="in-discomfort">
+          <option value="">— 미기록</option>
+          <option value="0">0 없음</option><option value="1">1</option><option value="2">2 뻐근(정상)</option>
+          <option value="3">3 ⚠ 롤백 기준</option><option value="4">4</option><option value="5">5</option>
+          <option value="6">6</option><option value="7">7</option><option value="8">8</option>
+          <option value="9">9</option><option value="10">10</option>
+        </select>
+      </div>
+      <div class="field" style="grid-column:span 2"><label>메모</label><input type="text" id="in-note" placeholder="컨디션, 특이사항"></div>
+    </div>
+
+    <div id="ex-list"></div>
+
+    <div class="entry-foot">
+      <div class="hint" style="margin:0" id="entry-hint">중량 첫 칸 입력 시 빈 세트에 자동 복사됩니다 · 수행한 세트만 횟수를 채우세요</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="ghost" id="btn-cancel-edit" style="display:none">수정 취소</button>
+        <button id="btn-save">세션 저장</button>
+      </div>
+    </div>
+    <div class="hint">워밍업: 트레드밀 빠르게 걷기 5분 + 동적 스트레칭 2~3분 (힙 서클, 레그 스윙, 팔 돌리기) · 마무리: 걷기/스트레칭 5분 후 불편감 기록</div>
+  </div>
+
+  <!-- 추세 -->
+  <div class="sec-label"><span class="n">03</span> 종목별 중량 추세 (최고 세트)</div>
+  <div class="charts" id="charts">
+    <div class="empty-note" style="grid-column:1/-1">세션이 2회 이상 쌓이면 종목별 추세가 나타납니다</div>
+  </div>
+
+  <!-- 세션 기록 -->
+  <div class="sec-label"><span class="n">04</span> 전체 세션</div>
+  <div class="table-scroll">
+    <table>
+      <thead><tr>
+        <th>날짜</th><th>단계</th><th>레그프레스</th><th>힙 힌지</th><th>체스트</th>
+        <th>숄더</th><th>랫풀다운</th><th>로우</th><th>레그컬</th><th>불편감</th><th></th>
+      </tr></thead>
+      <tbody id="table-body">
+        <tr><td colspan="11" style="text-align:center;color:var(--muted);padding:24px">기록 없음</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 프로그램 가이드 -->
+  <div class="sec-label"><span class="n">05</span> 프로그램 규칙</div>
+  <div class="guide">
+    <div class="guide-card">
+      <h4><span class="tag">1</span>1단계 — 1~2주차, 머신 5종 (총 6세션)</h4>
+      <ul>
+        <li>레그프레스 → 체스트프레스 → 랫풀다운 → 시티드 로우 → 레그컬, 각 <strong>3×10</strong></li>
+        <li>레그프레스: 허리 등받이 밀착, 가동범위 3/4</li>
+        <li>세트 간 휴식 <strong>90초</strong></li>
+        <li>중량: "10회 후 3~4회 여유" 수준 — 이 2주간 무겁게 들 일 없음</li>
+        <li>졸업 조건: <strong>6세션 개근 + 5종목 중량 기록 완료</strong></li>
+      </ul>
+    </div>
+    <div class="guide-card">
+      <h4><span class="tag">2</span>2단계 — 3주차~약 3개월, 7종 전신</h4>
+      <ul>
+        <li>레그프레스 → 힙 힌지 → 체스트 → 숄더 → 랫풀 → 로우 → 레그컬, 각 <strong>3×8~12</strong></li>
+        <li>힙 힌지: <strong>4~6주차 백 익스텐션</strong>(통증 없는 가동범위, 맨몸부터) → <strong>7주차~ 덤벨 RDL</strong>(가벼운 덤벨부터, 허리 중립)</li>
+        <li>숄더프레스: 등받이에 등 붙이고</li>
+        <li>휴식 90초~2분 · 세션 55~60분</li>
+      </ul>
+    </div>
+    <div class="guide-card">
+      <h4><span class="tag">↑</span>점진적 과부하 (2단계의 핵심)</h4>
+      <ul>
+        <li><strong>3세트 모두 12회 성공 → 다음 세션 중량 올리고 8회부터</strong></li>
+        <li>증량 폭: 상체 <strong>+2.5kg</strong>, 하체 <strong>+5kg</strong> 또는 머신 한 칸</li>
+        <li>매 세션 직전 지난 기록 확인 → 최소 한 종목 갱신 시도</li>
+        <li>기록 없는 세션은 없었던 세션입니다</li>
+      </ul>
+    </div>
+    <div class="guide-card">
+      <h4><span class="tag">!</span>허리 규칙 (전 기간 공통)</h4>
+      <ul>
+        <li>불편감 평소~+1·2 뻐근 → <strong>정상 진행</strong></li>
+        <li><strong>+3 이상, 다음날 지속 → 마지막 올린 중량 롤백</strong></li>
+        <li>다리 저림·방사통·힘 빠짐 신규 발생 → <strong>진료 대상</strong></li>
+        <li>RDL: 햄스트링이 당기는 감각이 정답 — 허리로 느껴지면 중량↓ 가동범위 축소</li>
+      </ul>
+    </div>
+    <div class="guide-card">
+      <h4><span class="tag">D</span>비운동일·생활 (전 기간 공통)</h4>
+      <ul>
+        <li>걷기 30분</li>
+        <li>업무 중 30~45분마다 자세 전환</li>
+        <li>단백질 매일 <strong>137~150g</strong>, 칼로리 유지</li>
+        <li>주 1회 체중(같은 요일 아침 공복) · 월 1회 <a href="/body" style="color:var(--series-1)">둘레 5부위 + Navy 체지방률</a></li>
+      </ul>
+    </div>
+    <div class="guide-card">
+      <h4><span class="tag">→</span>종료 조건</h4>
+      <ul>
+        <li>3개월 채웠는데 숫자가 계속 오르면 <strong>그대로 연장</strong></li>
+        <li>2~3주 연속 정체 / 머신 스택 한계 / 회복 여유 과다 → 기록 들고 오세요</li>
+        <li>다음: 프리웨이트 전환 버전</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="footnote">
+    <strong>기록 규칙</strong> — 세션은 서버 DB(프로필별)에 저장됩니다. 표의 값은 각 종목의 최고 세트(중량 우선), 화살표는 직전 세션 대비 변화.
+    행을 클릭하면 수정할 수 있습니다.
+  </div>
+
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+"use strict";
+/* ───────────────────────── 프로그램 정의 ─────────────────── */
+const EXERCISES = {
+  legpress:      { name: "레그프레스",   cat: "lower", col: "legpress",  note1: "허리 등받이 밀착, 가동범위 3/4" },
+  backext:       { name: "백 익스텐션", cat: "lower", col: "hinge", note2: "통증 없는 가동범위, 맨몸부터" },
+  rdl:           { name: "덤벨 RDL",    cat: "lower", col: "hinge", note2: "허리 중립 유지 — 햄스트링이 당기는 느낌이 정답" },
+  chestpress:    { name: "체스트프레스", cat: "upper", col: "chest" },
+  shoulderpress: { name: "숄더프레스",   cat: "upper", col: "shoulder", note2: "등받이에 등 붙이고" },
+  latpulldown:   { name: "랫풀다운",     cat: "upper", col: "lat" },
+  seatedrow:     { name: "시티드 로우",  cat: "upper", col: "row" },
+  legcurl:       { name: "레그컬",       cat: "lower", col: "legcurl" },
+};
+const PHASE1 = ["legpress", "chestpress", "latpulldown", "seatedrow", "legcurl"];
+const PHASE2 = (hinge) => ["legpress", hinge, "chestpress", "shoulderpress", "latpulldown", "seatedrow", "legcurl"];
+const COLS = ["legpress", "hinge", "chest", "shoulder", "lat", "row", "legcurl"]; // 테이블 열 순서
+const INC = (ex) => EXERCISES[ex].cat === "upper" ? 2.5 : 5;
+
+/* ───────────────────────── 저장소 (서버 DB) ─────────────── */
+const PROFILE_SLUG = (() => { try { return localStorage.getItem("ydocter-profile") || ""; } catch { return ""; } })();
+const Q = PROFILE_SLUG ? `?profile=${encodeURIComponent(PROFILE_SLUG)}` : "";
+let sessions = []; // [{date, phase, discomfort, note, sets:[{exercise,set_no,weight,reps}]}] 날짜 오름차순
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try { const j = await res.json(); if (j.detail) msg = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail); } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+const fromWire = (w) => ({
+  date: w.session_date, phase: w.phase, discomfort: w.discomfort, note: w.note,
+  sets: (w.sets || []).map(s => ({ exercise: s.exercise, set_no: s.set_no, weight: s.weight_kg, reps: s.reps })),
+});
+const toWire = (s) => ({
+  phase: s.phase, discomfort: s.discomfort, note: s.note,
+  sets: s.sets.map(t => ({ exercise: t.exercise, set_no: t.set_no, weight_kg: t.weight, reps: t.reps })),
+});
+async function reloadSessions() {
+  sessions = (await api(`/workout/sessions${Q}`)).map(fromWire);
+}
+const putSession = (s) => api(`/workout/sessions/${s.date}${Q}`, {
+  method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toWire(s)),
+});
+const deleteSessionApi = (date) => api(`/workout/sessions/${date}${Q}`, { method: "DELETE" });
+
+/* ───────────────────────── 조회 유틸 ─────────────────────── */
+const $ = id => document.getElementById(id);
+let editingDate = null;
+
+function exSets(session, ex) {
+  return session.sets.filter(t => t.exercise === ex).sort((a, b) => a.set_no - b.set_no);
+}
+/* ex를 수행한 가장 최근 세션 (excludeDate 제외) */
+function lastSessionWith(ex, excludeDate) {
+  for (let i = sessions.length - 1; i >= 0; i--) {
+    const s = sessions[i];
+    if (s.date === excludeDate) continue;
+    if (exSets(s, ex).length) return s;
+  }
+  return null;
+}
+function bestSet(sets) {
+  const done = sets.filter(t => t.weight != null || t.reps != null);
+  if (!done.length) return null;
+  return done.reduce((a, b) =>
+    (b.weight ?? 0) > (a.weight ?? 0) ? b :
+    (b.weight ?? 0) === (a.weight ?? 0) && (b.reps ?? 0) > (a.reps ?? 0) ? b : a);
+}
+const fmtW = (w) => w == null ? "–" : (Number.isInteger(w) ? w : w.toFixed(1));
+function fmtSets(sets) {
+  if (!sets.length) return "–";
+  const ws = [...new Set(sets.map(t => t.weight))];
+  if (ws.length === 1) return `${fmtW(ws[0])}kg · ${sets.map(t => t.reps ?? "–").join("/")}`;
+  return sets.map(t => `${fmtW(t.weight)}×${t.reps ?? "–"}`).join(" ");
+}
+/* 3세트 모두 12회 성공 여부 (2단계 증량 트리거) */
+function hitAll12(sets) {
+  const done = sets.filter(t => t.reps != null);
+  return done.length >= 3 && done.every(t => t.reps >= 12);
+}
+function progressionFor(ex, excludeDate) {
+  const last = lastSessionWith(ex, excludeDate);
+  if (!last) return null;
+  const sets = exSets(last, ex);
+  if (last.phase === 2 && hitAll12(sets)) {
+    const top = bestSet(sets);
+    if (top && top.weight != null) return { from: top.weight, to: top.weight + INC(ex) };
+  }
+  return null;
+}
+function mondayOf(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  const day = (d.getDay() + 6) % 7; // 월=0
+  d.setDate(d.getDate() - day);
+  return d.toISOString().slice(0, 10);
+}
+const p1Count = () => sessions.filter(s => s.phase === 1).length;
+
+/* ───────────────────────── 입력 폼 ───────────────────────── */
+function currentPlan() {
+  const phase = parseInt($("in-phase").value, 10);
+  return phase === 1 ? PHASE1 : PHASE2($("in-hinge").value);
+}
+function buildForm(prefill) {
+  const phase = parseInt($("in-phase").value, 10);
+  $("hinge-field").style.display = phase === 2 ? "" : "none";
+  const plan = currentPlan();
+  const box = $("ex-list");
+  box.innerHTML = "";
+  plan.forEach((ex, idx) => {
+    const meta = EXERCISES[ex];
+    const target = phase === 1 ? "3×10" : "3×8~12";
+    const last = lastSessionWith(ex, editingDate);
+    const lastSets = last ? exSets(last, ex) : [];
+    const prog = phase === 2 ? progressionFor(ex, editingDate) : null;
+    const note = (phase === 1 ? meta.note1 : meta.note2) || meta.note1 || "";
+
+    // 미리 채울 값: 수정 모드면 그 세션 값, 아니면 지난 세션 중량(증량 트리거 시 인상값)
+    const pre = [];
+    for (let i = 1; i <= 3; i++) {
+      if (prefill) {
+        const t = exSets(prefill, ex).find(t => t.set_no === i);
+        pre.push({ w: t?.weight ?? "", r: t?.reps ?? "" });
+      } else if (prog) {
+        pre.push({ w: prog.to, r: "" });
+      } else {
+        const t = lastSets.find(t => t.set_no === i) || lastSets[0];
+        pre.push({ w: t?.weight ?? "", r: "" });
+      }
+    }
+    const repsPH = phase === 1 ? "10" : (prog ? "8" : "8~12");
+
+    const row = document.createElement("div");
+    row.className = "ex-row";
+    row.dataset.ex = ex;
+    row.innerHTML = `
+      <div class="ex-info">
+        <div><span class="ex-no">${idx + 1}</span><span class="ex-name">${meta.name}</span><span class="ex-target">${target}</span></div>
+        ${note ? `<div class="ex-note">${note}</div>` : ""}
+        <div class="ex-last"><span class="lbl">지난 기록</span> ${lastSets.length ? `${fmtSets(lastSets)} <span class="lbl">(${last.date})</span>` : "없음"}</div>
+        ${prog ? `<span class="ex-hint">▲ 3×12 달성 — ${fmtW(prog.from)}→${fmtW(prog.to)}kg, 8회부터</span>` : ""}
+      </div>
+      <div class="ex-sets">
+        ${[0, 1, 2].map(i => `
+          <div class="set-pair">
+            <input class="w" type="number" step="0.5" min="0" data-set="${i + 1}" data-kind="w" value="${pre[i].w}" placeholder="kg"><span class="u">kg</span>
+            <span class="x">×</span>
+            <input class="r" type="number" step="1" min="0" data-set="${i + 1}" data-kind="r" value="${pre[i].r}" placeholder="${repsPH}">
+          </div>`).join("")}
+      </div>`;
+    box.appendChild(row);
+    // 1세트 중량 입력 → 빈 2·3세트 자동 복사
+    const wInputs = [...row.querySelectorAll('input[data-kind="w"]')];
+    wInputs[0].addEventListener("input", () => {
+      for (let i = 1; i < 3; i++) if (!wInputs[i].value) wInputs[i].value = wInputs[0].value;
+    });
+  });
+}
+function collectForm() {
+  const date = $("in-date").value;
+  const phase = parseInt($("in-phase").value, 10);
+  const discomfortRaw = $("in-discomfort").value;
+  const sets = [];
+  document.querySelectorAll("#ex-list .ex-row").forEach(row => {
+    const ex = row.dataset.ex;
+    for (let i = 1; i <= 3; i++) {
+      const w = row.querySelector(`input[data-kind="w"][data-set="${i}"]`).value;
+      const r = row.querySelector(`input[data-kind="r"][data-set="${i}"]`).value;
+      if (w === "" && r === "") continue;
+      sets.push({
+        exercise: ex, set_no: i,
+        weight: w === "" ? null : parseFloat(w),
+        reps: r === "" ? null : parseInt(r, 10),
+      });
+    }
+  });
+  return {
+    date, phase,
+    discomfort: discomfortRaw === "" ? null : parseInt(discomfortRaw, 10),
+    note: $("in-note").value.trim() || null,
+    sets,
+  };
+}
+
+/* ───────────────────────── 수정 모드 ─────────────────────── */
+function startEdit(s) {
+  editingDate = s.date;
+  $("in-date").value = s.date;
+  $("in-phase").value = String(s.phase);
+  const hinge = s.sets.find(t => EXERCISES[t.exercise]?.col === "hinge");
+  if (hinge) $("in-hinge").value = hinge.exercise;
+  $("in-discomfort").value = s.discomfort == null ? "" : String(s.discomfort);
+  $("in-note").value = s.note || "";
+  buildForm(s);
+  $("btn-save").textContent = "수정 저장";
+  $("btn-cancel-edit").style.display = "";
+  const badge = $("edit-badge");
+  badge.textContent = `수정 중 · ${s.date}`;
+  badge.style.display = "inline-block";
+  $("entry").classList.add("editing");
+  renderTable();
+  $("entry").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function cancelEdit() {
+  editingDate = null;
+  $("btn-save").textContent = "세션 저장";
+  $("btn-cancel-edit").style.display = "none";
+  $("edit-badge").style.display = "none";
+  $("entry").classList.remove("editing");
+  resetForm();
+  renderTable();
+}
+function resetForm() {
+  const t = new Date();
+  $("in-date").value = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+  $("in-discomfort").value = "";
+  $("in-note").value = "";
+  $("in-phase").value = String(p1Count() >= 6 ? 2 : 1);
+  const lastHinge = [...sessions].reverse().flatMap(s => s.sets).find(t => EXERCISES[t.exercise]?.col === "hinge");
+  if (lastHinge) $("in-hinge").value = lastHinge.exercise;
+  buildForm(null);
+}
+
+/* ───────────────────────── 저장/삭제 ─────────────────────── */
+$("in-phase").addEventListener("change", () => buildForm(editingDate ? sessions.find(s => s.date === editingDate) : null));
+$("in-hinge").addEventListener("change", () => buildForm(editingDate ? sessions.find(s => s.date === editingDate) : null));
+$("btn-cancel-edit").addEventListener("click", cancelEdit);
+
+$("btn-save").addEventListener("click", async () => {
+  const s = collectForm();
+  if (!s.date) return alert("날짜를 입력하세요.");
+  if (!s.sets.length) return alert("기록된 세트가 없습니다 — 기록 없는 세션은 없었던 세션입니다.");
+  const incomplete = s.sets.filter(t => t.weight == null || t.reps == null);
+  if (incomplete.length && !confirm(`중량 또는 횟수가 비어 있는 세트가 ${incomplete.length}개 있습니다. 그대로 저장할까요?`)) return;
+  const existing = sessions.find(x => x.date === s.date && x.date !== editingDate);
+  if (existing && !confirm(`${s.date} 세션이 이미 있습니다. 덮어쓸까요?`)) return;
+  try {
+    await putSession(s);
+    if (editingDate && editingDate !== s.date) await deleteSessionApi(editingDate);
+    await reloadSessions();
+  } catch (err) { alert("저장 실패: " + err.message); return; }
+  if (s.discomfort != null && s.discomfort >= 3) {
+    setTimeout(() => alert("허리 불편감 +3 이상입니다.\n다음날에도 지속되면 마지막 올린 중량을 롤백하세요.\n다리 저림·방사통·힘 빠짐이 새로 생겼다면 진료 대상입니다."), 100);
+  }
+  if (editingDate) cancelEdit(); else resetForm();
+  renderAll();
+});
+
+/* ───────────────────────── 렌더 ─────────────────────────── */
+function renderTiles() {
+  const box = $("tiles");
+  $("session-count").textContent = `세션 ${sessions.length}회`;
+  if (!sessions.length) { $("phase-label").textContent = "1단계"; return; }
+  const last = sessions[sessions.length - 1];
+  const p1 = p1Count();
+  const graduated = p1 >= 6;
+  $("phase-label").textContent = graduated ? "2단계" : `1단계 ${p1}/6`;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const weekStart = mondayOf(today);
+  const thisWeek = sessions.filter(s => s.date >= weekStart).length;
+
+  // 최근 세션에서 직전 대비 갱신(중량↑ 또는 같은 중량 횟수↑) 종목 수
+  let improved = 0;
+  const lastPlan = [...new Set(last.sets.map(t => t.exercise))];
+  lastPlan.forEach(ex => {
+    const prev = lastSessionWith(ex, last.date);
+    if (!prev) return;
+    const a = bestSet(exSets(last, ex)), b = bestSet(exSets(prev, ex));
+    if (!a || !b) return;
+    if ((a.weight ?? 0) > (b.weight ?? 0) ||
+        ((a.weight ?? 0) === (b.weight ?? 0) && (a.reps ?? 0) > (b.reps ?? 0))) improved++;
+  });
+
+  const tiles = [];
+  tiles.push(`<div class="tile">
+    <div class="label">총 세션</div>
+    <div class="value">${sessions.length}<span class="unit">회</span></div>
+    <div class="sub">시작 ${sessions[0].date}</div>
+  </div>`);
+  tiles.push(`<div class="tile">
+    <div class="label">${graduated ? "단계" : "1단계 졸업까지"}</div>
+    <div class="value">${graduated ? "2단계" : `${p1}<span class="unit">/6</span>`}</div>
+    <div class="sub">${graduated ? "7종 전신 · 3×8~12" : "6세션 개근 + 5종목 중량 기록"}</div>
+    <div class="bar"><div style="width:${Math.min(100, p1 / 6 * 100)}%"></div></div>
+  </div>`);
+  tiles.push(`<div class="tile">
+    <div class="label">이번 주</div>
+    <div class="value">${thisWeek}<span class="unit">/3</span></div>
+    <div class="sub">${thisWeek >= 3 ? '<span class="up">주 3회 완료</span>' : `${3 - thisWeek}회 남음`}</div>
+    <div class="bar"><div style="width:${Math.min(100, thisWeek / 3 * 100)}%"></div></div>
+  </div>`);
+  tiles.push(`<div class="tile">
+    <div class="label">최근 세션</div>
+    <div class="value" style="font-size:26px;padding-top:8px">${last.date.slice(5).replace("-", ".")}</div>
+    <div class="sub">${improved ? `<span class="up">▲ ${improved}종목 갱신</span> · ` : ""}불편감 ${last.discomfort ?? "미기록"}</div>
+  </div>`);
+  box.innerHTML = tiles.join("");
+}
+
+function renderVerdict() {
+  const box = $("verdict-box");
+  if (!sessions.length) { box.style.display = "none"; return; }
+  const last = sessions[sessions.length - 1];
+  let v;
+  if (last.discomfort != null && last.discomfort >= 3) {
+    v = { cls: "serious", icon: "▼", title: "허리 규칙 — 롤백 검토", body: `${last.date} 세션 불편감 ${last.discomfort}/10. 다음날에도 지속되면 마지막 올린 중량을 롤백하세요. 다리 저림·방사통·힘 빠짐 신규 발생 시 진료 대상.` };
+  } else {
+    const dueUp = [...new Set(last.sets.map(t => t.exercise))]
+      .filter(ex => progressionFor(ex, null))
+      .map(ex => EXERCISES[ex].name);
+    if (last.phase === 2 && dueUp.length) {
+      v = { cls: "good", icon: "▲", title: `다음 세션 증량: ${dueUp.length}종목`, body: `${dueUp.join(", ")} — 3세트 모두 12회 성공. 중량 올리고 8회부터 다시 시작 (상체 +2.5kg, 하체 +5kg).` };
+    } else if (p1Count() === 6 && last.phase === 1) {
+      v = { cls: "good", icon: "◆", title: "1단계 졸업", body: "6세션 완료 — 다음 세션부터 2단계(7종 전신, 3×8~12)로 진행하세요. 힙 힌지는 백 익스텐션부터." };
+    } else {
+      v = { cls: "warning", icon: "◔", title: "이번 세션 목표", body: "지난 기록 확인 후 최소 한 종목에서 중량 또는 횟수 갱신을 시도하세요." };
+    }
+  }
+  box.style.display = "flex";
+  box.className = "verdict " + v.cls;
+  box.innerHTML = `<div class="icon">${v.icon}</div><div><h3>${v.title}</h3><p>${v.body}</p></div>`;
+}
+
+function renderTable() {
+  const tb = $("table-body");
+  if (!sessions.length) {
+    tb.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:24px">기록 없음</td></tr>`;
+    return;
+  }
+  tb.innerHTML = sessions.map(s => {
+    const cells = COLS.map(col => {
+      const ex = [...new Set(s.sets.map(t => t.exercise))].find(e => EXERCISES[e]?.col === col);
+      if (!ex) return "<td>–</td>";
+      const top = bestSet(exSets(s, ex));
+      if (!top) return "<td>–</td>";
+      let dl = "";
+      const prev = lastSessionWith(ex, s.date);
+      // 표는 시간순이므로 "직전"은 s보다 이전 세션만
+      const prevBefore = (() => {
+        for (let i = sessions.indexOf(s) - 1; i >= 0; i--) if (exSets(sessions[i], ex).length) return sessions[i];
+        return null;
+      })();
+      if (prevBefore) {
+        const pb = bestSet(exSets(prevBefore, ex));
+        if (pb && pb.weight != null && top.weight != null) {
+          const dv = top.weight - pb.weight;
+          if (Math.abs(dv) >= 0.25) dl = `<span class="d ${dv > 0 ? "up" : "down"}">${dv > 0 ? "↑" : "↓"}</span>`;
+        }
+      }
+      return `<td>${fmtW(top.weight)}×${top.reps ?? "–"}${dl}</td>`;
+    }).join("");
+    const disc = s.discomfort == null ? "–"
+      : `<span class="disc-chip ${s.discomfort <= 2 ? "ok" : s.discomfort <= 4 ? "watch" : "rollback"}">${s.discomfort}</span>`;
+    return `<tr data-id="${s.date}" class="${s.date === editingDate ? "editing" : ""}" title="클릭하여 수정">
+      <td>${s.date}</td>
+      <td><span class="phase-badge ${s.phase === 2 ? "p2" : ""}">${s.phase}단계</span></td>
+      ${cells}
+      <td>${disc}</td>
+      <td><button class="del" data-id="${s.date}" title="삭제">✕</button></td>
+    </tr>`;
+  }).join("");
+  tb.querySelectorAll(".del").forEach(b => b.addEventListener("click", async e => {
+    e.stopPropagation();
+    if (!confirm("이 세션을 삭제할까요?")) return;
+    if (b.dataset.id === editingDate) cancelEdit();
+    try { await deleteSessionApi(b.dataset.id); await reloadSessions(); }
+    catch (err) { alert("삭제 실패: " + err.message); return; }
+    renderAll();
+  }));
+  tb.querySelectorAll("tr[data-id]").forEach(tr => tr.addEventListener("click", () => {
+    const s = sessions.find(x => x.date === tr.dataset.id);
+    if (s) startEdit(s);
+  }));
+}
+
+/* ───────────────────────── 차트 ─────────────────────────── */
+const tooltip = $("tooltip");
+function renderCharts() {
+  const box = $("charts");
+  const order = ["legpress", "backext", "rdl", "chestpress", "shoulderpress", "latpulldown", "seatedrow", "legcurl"];
+  const usable = order.filter(ex =>
+    sessions.filter(s => { const t = bestSet(exSets(s, ex)); return t && t.weight != null; }).length >= 2);
+  if (!usable.length) {
+    box.innerHTML = `<div class="empty-note" style="grid-column:1/-1">세션이 2회 이상 쌓이면 종목별 추세가 나타납니다</div>`;
+    return;
+  }
+  box.innerHTML = "";
+  usable.forEach(ex => box.appendChild(chartCard(ex)));
+}
+function chartCard(ex) {
+  const pts = sessions
+    .map(s => { const t = bestSet(exSets(s, ex)); return t && t.weight != null ? { date: s.date, v: t.weight, reps: t.reps } : null; })
+    .filter(Boolean);
+  const W = 320, H = 150, PAD = { t: 10, r: 14, b: 22, l: 40 };
+  const iw = W - PAD.l - PAD.r, ih = H - PAD.t - PAD.b;
+  let min = Math.min(...pts.map(p => p.v)), max = Math.max(...pts.map(p => p.v));
+  const span = Math.max(max - min, 2);
+  min -= span * 0.18; max += span * 0.18;
+  const x = i => PAD.l + (pts.length === 1 ? iw / 2 : i / (pts.length - 1) * iw);
+  const y = v => PAD.t + (1 - (v - min) / (max - min)) * ih;
+
+  const last = pts[pts.length - 1].v, delta = last - pts[0].v;
+  let grid = "";
+  for (let g = 0; g < 3; g++) {
+    const gv = min + (max - min) * (0.15 + g * 0.35);
+    grid += `<line x1="${PAD.l}" x2="${W - PAD.r}" y1="${y(gv)}" y2="${y(gv)}" stroke="var(--grid)" stroke-width="1"/>
+             <text x="${PAD.l - 6}" y="${y(gv) + 3}" text-anchor="end">${gv.toFixed(1)}</text>`;
+  }
+  const path = pts.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join("");
+  const area = path + `L${x(pts.length - 1).toFixed(1)},${y(min)}L${x(0).toFixed(1)},${y(min)}Z`;
+  const dots = pts.map((p, i) =>
+    `<circle cx="${x(i).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="4" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"/>`).join("");
+  const xl = d => d.slice(2).replace(/-/g, ".");
+  const xLabels = `<text x="${x(0)}" y="${H - 6}" text-anchor="start">${xl(pts[0].date)}</text>
+                   <text x="${x(pts.length - 1)}" y="${H - 6}" text-anchor="end">${xl(pts[pts.length - 1].date)}</text>`;
+  const lastLabel = `<text x="${x(pts.length - 1) - 8}" y="${y(last) - 9}" text-anchor="end" style="fill:var(--ink-2);font-weight:600">${fmtW(last)}</text>`;
+
+  const card = document.createElement("div");
+  card.className = "chart-card";
+  card.innerHTML = `<h4>${EXERCISES[ex].name} <span style="color:var(--muted);font-weight:400">kg</span>
+      <span class="cur"><span style="font-size:11px;color:${delta > 0 ? "var(--delta-up)" : delta < 0 ? "var(--serious)" : "var(--muted)"}">${delta > 0 ? "+" : ""}${fmtW(delta)}</span></span></h4>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      ${grid}
+      <line x1="${PAD.l}" x2="${W - PAD.r}" y1="${PAD.t + ih}" y2="${PAD.t + ih}" stroke="var(--baseline)" stroke-width="1"/>
+      <path d="${area}" fill="var(--series-2)" opacity="0.08"/>
+      <path d="${path}" fill="none" stroke="var(--series-2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <line class="xhair" x1="0" x2="0" y1="${PAD.t}" y2="${PAD.t + ih}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
+      ${dots}${lastLabel}${xLabels}
+    </svg>`;
+  const svg = card.querySelector("svg");
+  const xhair = svg.querySelector(".xhair");
+  svg.addEventListener("mousemove", e => {
+    const rect = svg.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) / rect.width * W;
+    let bi = 0, bd = Infinity;
+    pts.forEach((p, i) => { const d = Math.abs(x(i) - mx); if (d < bd) { bd = d; bi = i; } });
+    xhair.setAttribute("x1", x(bi)); xhair.setAttribute("x2", x(bi)); xhair.setAttribute("opacity", "1");
+    const p = pts[bi];
+    tooltip.innerHTML = `<div class="tt-date">${p.date}</div>${EXERCISES[ex].name} <strong>${fmtW(p.v)}kg × ${p.reps ?? "–"}</strong>`;
+    tooltip.style.display = "block";
+    const tw = tooltip.offsetWidth;
+    tooltip.style.left = Math.min(e.clientX + 14, window.innerWidth - tw - 8) + "px";
+    tooltip.style.top = (e.clientY - 40) + "px";
+  });
+  svg.addEventListener("mouseleave", () => { xhair.setAttribute("opacity", "0"); tooltip.style.display = "none"; });
+  return card;
+}
+
+/* ───────────────────────── 초기화 ───────────────────────── */
+function renderAll() { renderTiles(); renderVerdict(); renderCharts(); renderTable(); }
+(async function init() {
+  try {
+    await reloadSessions();
+  } catch (err) {
+    const box = $("verdict-box");
+    box.style.display = "flex";
+    box.className = "verdict serious";
+    box.innerHTML = `<div class="icon">✕</div><div><h3>서버 연결 실패</h3><p>세션을 불러오지 못했습니다 (${err.message}). 서버 상태 확인 후 새로고침하세요.</p></div>`;
+    return;
+  }
+  resetForm();
+  renderAll();
+})();
+</script>
+</body>
+</html>
