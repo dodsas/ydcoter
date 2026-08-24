@@ -278,8 +278,17 @@
     .header-meta { text-align: left; width: 100%; }
     .page-nav { justify-content: flex-start; }
     .page-nav a { padding: 8px 14px; font-size: 12px; }
+    /* 스탯 타일: 한 줄에 2개 */
+    .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .tile { padding: 12px 12px 10px; }
+    .tile .value { font-size: 30px; }
+    .tile .unit { font-size: 13px; }
+    .tile .sub { font-size: 11px; min-height: 0; }
     .entry { padding: 16px 14px; }
-    .entry-grid { grid-template-columns: 1fr 1fr; }
+    /* 입력칸: 정확히 1:1 균등폭 (minmax(0,·)로 내용 최소폭 무시) */
+    .entry-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .field input, .field select { padding: 9px 8px; min-width: 0; }
+    .field input[type="date"] { padding-left: 5px; padding-right: 5px; }
   }
 </style>
 </head>
