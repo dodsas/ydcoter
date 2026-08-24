@@ -2,7 +2,10 @@
 <html lang="ko" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d0d0d">
 <title>WORKOUT — 머신 전신 프로그램 기록</title>
 <link rel="icon" type="image/svg+xml" href="/assets/doctor.svg?v={{V}}" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -49,7 +52,7 @@
     min-height: 100vh;
   }
 
-  .wrap { max-width: 1060px; margin: 0 auto; padding: 40px 24px 80px; }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: calc(40px + env(safe-area-inset-top)) 24px 80px; }
 
   header {
     display: flex; align-items: flex-end; justify-content: space-between;
@@ -271,6 +274,24 @@
   header, .verdict, .tiles, .entry, .charts, .table-scroll, .guide { animation: rise .5s cubic-bezier(.2,.8,.2,1) both; }
   .verdict { animation-delay: .05s; } .tiles { animation-delay: .1s; }
   .entry { animation-delay: .15s; } .charts { animation-delay: .2s; }
+
+  /* ─── 모바일 (기본 규칙보다 뒤에 둬야 캐스케이드에서 이김) ── */
+  /* iOS는 16px 미만 입력창 포커스 시 화면을 자동 줌한다 → 터치 기기는 16px 고정 */
+  @media (pointer: coarse) {
+    .field input, .field select, .set-pair input, .profile-mini { font-size: 16px; }
+    .set-pair .w { width: 62px; }
+    .set-pair .r { width: 44px; }
+  }
+  @media (max-width: 640px) {
+    .wrap { padding-left: 14px; padding-right: 14px; padding-bottom: 60px; }
+    .ex-row { grid-template-columns: 1fr; gap: 8px; }
+    .ex-sets { width: 100%; }
+    .set-pair { flex: 1 1 30%; min-width: 0; justify-content: center; }
+    .set-pair input { min-width: 0; }
+    .entry { padding: 16px 14px; }
+    .entry-top { grid-template-columns: 1fr 1fr; }
+    .entry-top .field[style*="span 2"], .field#hinge-field { grid-column: span 2; }
+  }
 </style>
 </head>
 <body>
@@ -598,10 +619,19 @@ function buildForm(prefill) {
           </div>`).join("")}
       </div>`;
     box.appendChild(row);
-    // 1세트 중량 입력 → 빈 2·3세트 자동 복사
+    // 1세트 중량 입력 → 2·3세트 자동 따라가기.
+    // 2·3세트를 직접 수정하기 전까지는 1세트를 계속 따라가고,
+    // 직접 수정한 세트는 독립 (비우면 다시 따라감).
     const wInputs = [...row.querySelectorAll('input[data-kind="w"]')];
+    const follows = [1, 2].map(i => wInputs[i].value === "" || wInputs[i].value === wInputs[0].value);
+    [1, 2].forEach(i => wInputs[i].addEventListener("input", () => { follows[i - 1] = false; }));
     wInputs[0].addEventListener("input", () => {
-      for (let i = 1; i < 3; i++) if (!wInputs[i].value) wInputs[i].value = wInputs[0].value;
+      [1, 2].forEach(i => {
+        if (follows[i - 1] || wInputs[i].value === "") {
+          wInputs[i].value = wInputs[0].value;
+          follows[i - 1] = true;
+        }
+      });
     });
   });
 }

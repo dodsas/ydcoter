@@ -2,7 +2,10 @@
 <html lang="ko" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d0d0d">
 <title>BODY LOG — 둘레 측정 기록</title>
 <link rel="icon" type="image/svg+xml" href="/assets/doctor.svg?v={{V}}" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -50,7 +53,7 @@
     min-height: 100vh;
   }
 
-  .wrap { max-width: 1060px; margin: 0 auto; padding: 40px 24px 80px; }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: calc(40px + env(safe-area-inset-top)) 24px 80px; }
 
   /* ─── 헤더 ─────────────────────────────────────────────── */
   header {
@@ -256,6 +259,17 @@
   header, .verdict, .tiles, .entry, .charts, .table-scroll, .guide { animation: rise .5s cubic-bezier(.2,.8,.2,1) both; }
   .verdict { animation-delay: .05s; } .tiles { animation-delay: .1s; }
   .entry { animation-delay: .15s; } .charts { animation-delay: .2s; }
+
+  /* ─── 모바일 ─────────────────────────────────────────── */
+  /* iOS는 16px 미만 입력창 포커스 시 화면을 자동 줌한다 → 터치 기기는 16px 고정 */
+  @media (pointer: coarse) {
+    .field input, .field select, .profile-mini { font-size: 16px; }
+  }
+  @media (max-width: 640px) {
+    .wrap { padding-left: 14px; padding-right: 14px; padding-bottom: 60px; }
+    .entry { padding: 16px 14px; }
+    .entry-grid { grid-template-columns: 1fr 1fr; }
+  }
 </style>
 </head>
 <body>
