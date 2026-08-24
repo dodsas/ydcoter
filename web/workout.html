@@ -70,6 +70,12 @@
   }
   .header-meta strong { color: var(--ink-2); font-weight: 500; }
   .header-meta a { text-decoration: none; }
+  .profile-mini {
+    background: var(--surface-2); color: var(--ink);
+    border: 1px solid var(--baseline); border-radius: 0;
+    font-family: var(--font-mono); font-size: 11px; padding: 2px 6px;
+  }
+  .profile-mini:focus { outline: none; border-color: var(--series-2); }
 
   .sec-label {
     font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em;
@@ -273,7 +279,7 @@
   <header>
     <h1>Work<span class="accent">/</span>Out</h1>
     <div class="header-meta">
-      머신 전신 · 주 3회 · 점진적 과부하<br>
+      머신 전신 · 주 3회 · 프로필 <select id="profile-select" class="profile-mini"><option>…</option></select><br>
       <strong id="session-count">세션 0회</strong> · <span id="phase-label">1단계</span><br>
       <a href="/body" style="color:var(--series-2)">← Body Log</a> ·
       <a href="/" style="color:var(--muted)">ydocter</a>
@@ -436,8 +442,13 @@ const COLS = ["legpress", "hinge", "chest", "shoulder", "lat", "row", "legcurl"]
 const INC = (ex) => EXERCISES[ex].cat === "upper" ? 2.5 : 5;
 
 /* ───────────────────────── 저장소 (서버 DB) ─────────────── */
-const PROFILE_SLUG = (() => { try { return localStorage.getItem("ydocter-profile") || ""; } catch { return ""; } })();
-const Q = PROFILE_SLUG ? `?profile=${encodeURIComponent(PROFILE_SLUG)}` : "";
+let PROFILE_SLUG = (() => { try { return localStorage.getItem("ydocter-profile") || ""; } catch { return ""; } })();
+const Q = () => PROFILE_SLUG ? `?profile=${encodeURIComponent(PROFILE_SLUG)}` : "";
+function persistProfile(slug) {
+  PROFILE_SLUG = slug;
+  try { localStorage.setItem("ydocter-profile", slug); } catch {}
+  document.cookie = `ydocter_profile=${encodeURIComponent(slug)}; Max-Age=31536000; Path=/; SameSite=Lax`;
+}
 let sessions = []; // [{date, phase, discomfort, note, sets:[{exercise,set_no,weight,reps}]}] 날짜 오름차순
 
 async function api(path, opts) {
@@ -458,12 +469,28 @@ const toWire = (s) => ({
   sets: s.sets.map(t => ({ exercise: t.exercise, set_no: t.set_no, weight_kg: t.weight, reps: t.reps })),
 });
 async function reloadSessions() {
-  sessions = (await api(`/workout/sessions${Q}`)).map(fromWire);
+  sessions = (await api(`/workout/sessions${Q()}`)).map(fromWire);
 }
-const putSession = (s) => api(`/workout/sessions/${s.date}${Q}`, {
+const putSession = (s) => api(`/workout/sessions/${s.date}${Q()}`, {
   method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toWire(s)),
 });
-const deleteSessionApi = (date) => api(`/workout/sessions/${date}${Q}`, { method: "DELETE" });
+const deleteSessionApi = (date) => api(`/workout/sessions/${date}${Q()}`, { method: "DELETE" });
+
+/* 프로필 셀렉트: /profiles 로딩 → 현재 선택 표시 → 전환 시 재조회 */
+async function initProfileSwitcher(onSwitch) {
+  const sel = document.getElementById("profile-select");
+  try {
+    const profiles = await api("/profiles");
+    if (!profiles.length) { sel.style.display = "none"; return; }
+    sel.innerHTML = profiles.map(p => `<option value="${p.slug}">${p.display_name}</option>`).join("");
+    if (!profiles.some(p => p.slug === PROFILE_SLUG)) persistProfile(profiles[0].slug);
+    sel.value = PROFILE_SLUG;
+    sel.addEventListener("change", async () => {
+      persistProfile(sel.value);
+      await onSwitch();
+    });
+  } catch { sel.style.display = "none"; }
+}
 
 /* ───────────────────────── 조회 유틸 ─────────────────────── */
 const $ = id => document.getElementById(id);
@@ -873,6 +900,12 @@ function chartCard(ex) {
 function renderAll() { renderTiles(); renderVerdict(); renderCharts(); renderTable(); }
 (async function init() {
   try {
+    await initProfileSwitcher(async () => {
+      if (editingDate) cancelEdit();
+      await reloadSessions();
+      resetForm();
+      renderAll();
+    });
     await reloadSessions();
   } catch (err) {
     const box = $("verdict-box");

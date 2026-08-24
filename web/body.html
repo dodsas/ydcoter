@@ -71,6 +71,12 @@
     font-family: var(--font-mono);
   }
   .header-meta strong { color: var(--ink-2); font-weight: 500; }
+  .profile-mini {
+    background: var(--surface-2); color: var(--ink);
+    border: 1px solid var(--baseline); border-radius: 0;
+    font-family: var(--font-mono); font-size: 11px; padding: 2px 6px;
+  }
+  .profile-mini:focus { outline: none; border-color: var(--series-1); }
 
   /* ─── 섹션 라벨 ─────────────────────────────────────────── */
   .sec-label {
@@ -258,7 +264,7 @@
   <header>
     <h1>Body<span class="accent">/</span>Log</h1>
     <div class="header-meta">
-      NAVY METHOD · 월 1회 측정<br>
+      NAVY METHOD · 월 1회 측정 · 프로필 <select id="profile-select" class="profile-mini"><option>…</option></select><br>
       <strong id="record-count">기록 0건</strong> · <span id="days-since">Day 0</span><br>
       <a href="/" style="color:var(--series-1);text-decoration:none">← ydocter</a> ·
       <a href="/workout" style="color:var(--series-2);text-decoration:none">Workout</a> ·
@@ -381,9 +387,14 @@
    UI 편의값(키·성별)과 구버전 데이터 마이그레이션에만 사용. */
 const LEGACY_KEY = "bodylog.v1";
 const PREFS_KEY  = "bodylog.prefs";
-// 다른 페이지(영양/대시보드)에서 고른 프로필을 그대로 따라간다.
-const PROFILE_SLUG = (() => { try { return localStorage.getItem("ydocter-profile") || ""; } catch { return ""; } })();
-const Q = PROFILE_SLUG ? `?profile=${encodeURIComponent(PROFILE_SLUG)}` : "";
+// 다른 페이지(영양/대시보드)와 같은 키를 공유 — 헤더 셀렉트로 전환 가능.
+let PROFILE_SLUG = (() => { try { return localStorage.getItem("ydocter-profile") || ""; } catch { return ""; } })();
+const Q = () => PROFILE_SLUG ? `?profile=${encodeURIComponent(PROFILE_SLUG)}` : "";
+function persistProfile(slug) {
+  PROFILE_SLUG = slug;
+  try { localStorage.setItem("ydocter-profile", slug); } catch {}
+  document.cookie = `ydocter_profile=${encodeURIComponent(slug)}; Max-Age=31536000; Path=/; SameSite=Lax`;
+}
 
 let db = { records: [] };
 const prefs = (() => { try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; } catch { return {}; } })();
@@ -413,12 +424,28 @@ function toWire(f) {
   return w;
 }
 async function reloadRecords() {
-  db.records = (await api(`/body/records${Q}`)).map(fromWire);
+  db.records = (await api(`/body/records${Q()}`)).map(fromWire);
 }
-const putRecord = (date, f) => api(`/body/records/${date}${Q}`, {
+const putRecord = (date, f) => api(`/body/records/${date}${Q()}`, {
   method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toWire(f)),
 });
-const deleteRecordApi = (date) => api(`/body/records/${date}${Q}`, { method: "DELETE" });
+const deleteRecordApi = (date) => api(`/body/records/${date}${Q()}`, { method: "DELETE" });
+
+/* 프로필 셀렉트: /profiles 로딩 → 현재 선택 표시 → 전환 시 재조회 */
+async function initProfileSwitcher(onSwitch) {
+  const sel = document.getElementById("profile-select");
+  try {
+    const profiles = await api("/profiles");
+    if (!profiles.length) { sel.style.display = "none"; return; }
+    sel.innerHTML = profiles.map(p => `<option value="${p.slug}">${p.display_name}</option>`).join("");
+    if (!profiles.some(p => p.slug === PROFILE_SLUG)) persistProfile(profiles[0].slug);
+    sel.value = PROFILE_SLUG;
+    sel.addEventListener("change", async () => {
+      persistProfile(sel.value);
+      await onSwitch();
+    });
+  } catch { sel.style.display = "none"; }
+}
 
 /* ───────────────────────── 계산 ─────────────────────────── */
 function bodyFat(sex, h, neck, waist, hip) {
@@ -847,6 +874,11 @@ async function migrateLegacy() {
   $("in-sex").value = prefs.lastSex ?? "m";
   updatePreview();
   try {
+    await initProfileSwitcher(async () => {
+      if (editingId) cancelEdit();
+      await reloadRecords();
+      renderAll();
+    });
     await reloadRecords();
     await migrateLegacy();
   } catch (err) {
