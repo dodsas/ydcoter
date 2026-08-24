@@ -73,6 +73,13 @@
   }
   .header-meta strong { color: var(--ink-2); font-weight: 500; }
   .header-meta a { text-decoration: none; }
+  .page-nav { margin-top: 8px; display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+  .page-nav a {
+    display: inline-block; padding: 5px 11px;
+    border: 1px solid var(--baseline); color: var(--ink-2);
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em;
+  }
+  .page-nav a:hover { border-color: var(--muted); color: var(--ink); }
   .profile-mini {
     background: var(--surface-2); color: var(--ink);
     border: 1px solid var(--baseline); border-radius: 0;
@@ -284,6 +291,10 @@
   }
   @media (max-width: 640px) {
     .wrap { padding-left: 14px; padding-right: 14px; padding-bottom: 60px; }
+    header { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .header-meta { text-align: left; width: 100%; }
+    .page-nav { justify-content: flex-start; }
+    .page-nav a { padding: 8px 14px; font-size: 12px; }
     .ex-row { grid-template-columns: 1fr; gap: 8px; }
     .ex-sets { width: 100%; }
     .set-pair { flex: 1 1 30%; min-width: 0; justify-content: center; }
@@ -301,9 +312,12 @@
     <h1>Work<span class="accent">/</span>Out</h1>
     <div class="header-meta">
       머신 전신 · 주 3회 · 프로필 <select id="profile-select" class="profile-mini"><option>…</option></select><br>
-      <strong id="session-count">세션 0회</strong> · <span id="phase-label">1단계</span><br>
-      <a href="/body" style="color:var(--series-2)">← Body Log</a> ·
-      <a href="/" style="color:var(--muted)">ydocter</a>
+      <strong id="session-count">세션 0회</strong> · <span id="phase-label">1단계</span>
+      <nav class="page-nav">
+        <a href="/body" data-keep-profile style="color:var(--series-1);border-color:var(--series-1)">Body Log</a>
+        <a href="/nutrition">Nutrition</a>
+        <a href="/dashboard">Records</a>
+      </nav>
     </div>
   </header>
 
@@ -422,7 +436,7 @@
         <li>걷기 30분</li>
         <li>업무 중 30~45분마다 자세 전환</li>
         <li>단백질 매일 <strong>137~150g</strong>, 칼로리 유지</li>
-        <li>주 1회 체중(같은 요일 아침 공복) · 월 1회 <a href="/body" style="color:var(--series-1)">둘레 5부위 + Navy 체지방률</a></li>
+        <li>주 1회 체중(같은 요일 아침 공복) · 월 1회 <a href="/body" data-keep-profile style="color:var(--series-1)">둘레 5부위 + Navy 체지방률</a></li>
       </ul>
     </div>
     <div class="guide-card">
@@ -463,12 +477,32 @@ const COLS = ["legpress", "hinge", "chest", "shoulder", "lat", "row", "legcurl"]
 const INC = (ex) => EXERCISES[ex].cat === "upper" ? 2.5 : 5;
 
 /* ───────────────────────── 저장소 (서버 DB) ─────────────── */
-let PROFILE_SLUG = (() => { try { return localStorage.getItem("ydocter-profile") || ""; } catch { return ""; } })();
+// 우선순위: URL ?profile= (공유/즐겨찾기용) > localStorage (사이트 공통 선택)
+let PROFILE_SLUG = (() => {
+  try {
+    const fromUrl = new URLSearchParams(location.search).get("profile");
+    if (fromUrl) return fromUrl;
+    return localStorage.getItem("ydocter-profile") || "";
+  } catch { return ""; }
+})();
 const Q = () => PROFILE_SLUG ? `?profile=${encodeURIComponent(PROFILE_SLUG)}` : "";
 function persistProfile(slug) {
   PROFILE_SLUG = slug;
   try { localStorage.setItem("ydocter-profile", slug); } catch {}
   document.cookie = `ydocter_profile=${encodeURIComponent(slug)}; Max-Age=31536000; Path=/; SameSite=Lax`;
+  // 주소창과 내부 이동 링크에 프로필을 반영 — URL만 복사해도 컨텍스트 유지
+  try {
+    const u = new URL(location.href);
+    u.searchParams.set("profile", slug);
+    history.replaceState(null, "", u.pathname + u.search);
+  } catch {}
+  document.querySelectorAll("a[data-keep-profile]").forEach(a => {
+    try {
+      const u = new URL(a.getAttribute("href"), location.origin);
+      u.searchParams.set("profile", slug);
+      a.setAttribute("href", u.pathname + u.search);
+    } catch {}
+  });
 }
 let sessions = []; // [{date, phase, discomfort, note, sets:[{exercise,set_no,weight,reps}]}] 날짜 오름차순
 
@@ -504,7 +538,8 @@ async function initProfileSwitcher(onSwitch) {
     const profiles = await api("/profiles");
     if (!profiles.length) { sel.style.display = "none"; return; }
     sel.innerHTML = profiles.map(p => `<option value="${p.slug}">${p.display_name}</option>`).join("");
-    if (!profiles.some(p => p.slug === PROFILE_SLUG)) persistProfile(profiles[0].slug);
+    if (!profiles.some(p => p.slug === PROFILE_SLUG)) PROFILE_SLUG = profiles[0].slug;
+    persistProfile(PROFILE_SLUG); // 확정된 프로필을 URL·저장소·링크에 반영
     sel.value = PROFILE_SLUG;
     sel.addEventListener("change", async () => {
       persistProfile(sel.value);

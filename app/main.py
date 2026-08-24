@@ -887,7 +887,8 @@ def _render_html(name: str) -> HTMLResponse:
 
 @app.get("/", include_in_schema=False)
 def root() -> HTMLResponse:
-    return _render_html("nutrition.html")
+    # 메인 페이지 = 운동 기록 (영양은 /nutrition 으로)
+    return _render_html("workout.html")
 
 
 @app.get("/dashboard", include_in_schema=False)

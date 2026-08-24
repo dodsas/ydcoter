@@ -74,6 +74,13 @@
     font-family: var(--font-mono);
   }
   .header-meta strong { color: var(--ink-2); font-weight: 500; }
+  .page-nav { margin-top: 8px; display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+  .page-nav a {
+    display: inline-block; padding: 5px 11px; text-decoration: none;
+    border: 1px solid var(--baseline); color: var(--ink-2);
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em;
+  }
+  .page-nav a:hover { border-color: var(--muted); color: var(--ink); }
   .profile-mini {
     background: var(--surface-2); color: var(--ink);
     border: 1px solid var(--baseline); border-radius: 0;
@@ -267,6 +274,10 @@
   }
   @media (max-width: 640px) {
     .wrap { padding-left: 14px; padding-right: 14px; padding-bottom: 60px; }
+    header { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .header-meta { text-align: left; width: 100%; }
+    .page-nav { justify-content: flex-start; }
+    .page-nav a { padding: 8px 14px; font-size: 12px; }
     .entry { padding: 16px 14px; }
     .entry-grid { grid-template-columns: 1fr 1fr; }
   }
@@ -279,10 +290,12 @@
     <h1>Body<span class="accent">/</span>Log</h1>
     <div class="header-meta">
       NAVY METHOD · 월 1회 측정 · 프로필 <select id="profile-select" class="profile-mini"><option>…</option></select><br>
-      <strong id="record-count">기록 0건</strong> · <span id="days-since">Day 0</span><br>
-      <a href="/" style="color:var(--series-1);text-decoration:none">← ydocter</a> ·
-      <a href="/workout" style="color:var(--series-2);text-decoration:none">Workout</a> ·
-      <a href="/dashboard" style="color:var(--muted);text-decoration:none">Health Records</a>
+      <strong id="record-count">기록 0건</strong> · <span id="days-since">Day 0</span>
+      <nav class="page-nav">
+        <a href="/" data-keep-profile style="color:var(--series-2);border-color:var(--series-2)">Workout</a>
+        <a href="/nutrition">Nutrition</a>
+        <a href="/dashboard">Records</a>
+      </nav>
     </div>
   </header>
 
@@ -401,13 +414,32 @@
    UI 편의값(키·성별)과 구버전 데이터 마이그레이션에만 사용. */
 const LEGACY_KEY = "bodylog.v1";
 const PREFS_KEY  = "bodylog.prefs";
-// 다른 페이지(영양/대시보드)와 같은 키를 공유 — 헤더 셀렉트로 전환 가능.
-let PROFILE_SLUG = (() => { try { return localStorage.getItem("ydocter-profile") || ""; } catch { return ""; } })();
+// 우선순위: URL ?profile= (공유/즐겨찾기용) > localStorage (사이트 공통 선택)
+let PROFILE_SLUG = (() => {
+  try {
+    const fromUrl = new URLSearchParams(location.search).get("profile");
+    if (fromUrl) return fromUrl;
+    return localStorage.getItem("ydocter-profile") || "";
+  } catch { return ""; }
+})();
 const Q = () => PROFILE_SLUG ? `?profile=${encodeURIComponent(PROFILE_SLUG)}` : "";
 function persistProfile(slug) {
   PROFILE_SLUG = slug;
   try { localStorage.setItem("ydocter-profile", slug); } catch {}
   document.cookie = `ydocter_profile=${encodeURIComponent(slug)}; Max-Age=31536000; Path=/; SameSite=Lax`;
+  // 주소창과 내부 이동 링크에 프로필을 반영 — URL만 복사해도 컨텍스트 유지
+  try {
+    const u = new URL(location.href);
+    u.searchParams.set("profile", slug);
+    history.replaceState(null, "", u.pathname + u.search);
+  } catch {}
+  document.querySelectorAll("a[data-keep-profile]").forEach(a => {
+    try {
+      const u = new URL(a.getAttribute("href"), location.origin);
+      u.searchParams.set("profile", slug);
+      a.setAttribute("href", u.pathname + u.search);
+    } catch {}
+  });
 }
 
 let db = { records: [] };
@@ -452,7 +484,8 @@ async function initProfileSwitcher(onSwitch) {
     const profiles = await api("/profiles");
     if (!profiles.length) { sel.style.display = "none"; return; }
     sel.innerHTML = profiles.map(p => `<option value="${p.slug}">${p.display_name}</option>`).join("");
-    if (!profiles.some(p => p.slug === PROFILE_SLUG)) persistProfile(profiles[0].slug);
+    if (!profiles.some(p => p.slug === PROFILE_SLUG)) PROFILE_SLUG = profiles[0].slug;
+    persistProfile(PROFILE_SLUG); // 확정된 프로필을 URL·저장소·링크에 반영
     sel.value = PROFILE_SLUG;
     sel.addEventListener("change", async () => {
       persistProfile(sel.value);
