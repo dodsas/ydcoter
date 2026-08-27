@@ -47,6 +47,8 @@ from app.models import (
     ReferenceUpdate,
     TestItem,
     Trend,
+    WeightRecord,
+    WeightRecordIn,
     TrendPoint,
     WorkoutSession,
     WorkoutSessionIn,
@@ -660,6 +662,72 @@ def body_record_delete(
     with get_conn() as conn:
         conn.execute(
             "DELETE FROM body_records WHERE profile_id = ? AND record_date = ?",
+            (pid, record_date),
+        )
+        conn.commit()
+    return {"ok": True, "record_date": record_date}
+
+
+# ===========================================================================
+# Weekly weigh-ins (/body page)
+# ===========================================================================
+
+
+@app.get("/weight/records", response_model=List[WeightRecord])
+def weight_records(profile: Optional[str] = Query(None)) -> List[WeightRecord]:
+    """All weekly weigh-ins for a profile, oldest first."""
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT record_date, weight_kg, note
+            FROM weight_records
+            WHERE profile_id = ?
+            ORDER BY record_date
+            """,
+            (pid,),
+        ).fetchall()
+    return [WeightRecord(**dict(r)) for r in rows]
+
+
+@app.put("/weight/records/{record_date}", response_model=WeightRecord)
+def weight_record_upsert(
+    record_date: str,
+    body: WeightRecordIn,
+    profile: Optional[str] = Query(None),
+) -> WeightRecord:
+    """Insert or replace the weigh-in for one date (date = natural key)."""
+    if not _DATE_RE.match(record_date):
+        raise HTTPException(422, "record_date must be ISO YYYY-MM-DD")
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO weight_records (profile_id, record_date, weight_kg, note)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT (profile_id, record_date) DO UPDATE SET
+                weight_kg = excluded.weight_kg, note = excluded.note
+            """,
+            (pid, record_date, body.weight_kg, body.note),
+        )
+        conn.commit()
+    return WeightRecord(record_date=record_date, **body.model_dump())
+
+
+@app.delete("/weight/records/{record_date}")
+def weight_record_delete(
+    record_date: str,
+    profile: Optional[str] = Query(None),
+) -> dict:
+    if not _DATE_RE.match(record_date):
+        raise HTTPException(422, "record_date must be ISO YYYY-MM-DD")
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
+    with get_conn() as conn:
+        conn.execute(
+            "DELETE FROM weight_records WHERE profile_id = ? AND record_date = ?",
             (pid, record_date),
         )
         conn.commit()

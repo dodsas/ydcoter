@@ -298,7 +298,7 @@
   <header>
     <h1>Body<span class="accent">/</span>Log</h1>
     <div class="header-meta">
-      NAVY METHOD · 월 1회 측정 · 프로필 <select id="profile-select" class="profile-mini"><option>…</option></select><br>
+      NAVY METHOD · 월 1회 둘레 · 주 1회 체중 · 프로필 <select id="profile-select" class="profile-mini"><option>…</option></select><br>
       <strong id="record-count">기록 0건</strong> · <span id="days-since">Day 0</span>
       <nav class="page-nav">
         <a href="/" data-keep-profile style="color:var(--series-2);border-color:var(--series-2)">Workout</a>
@@ -318,8 +318,29 @@
     <div class="empty-note" style="grid-column:1/-1">아직 기록이 없습니다. 아래에 첫 측정을 입력하면 그날이 <strong>Day 0 기준점</strong>이 됩니다.</div>
   </div>
 
+  <!-- 주간 체중 -->
+  <div class="sec-label"><span class="n">02</span> 주간 체중</div>
+  <div class="entry">
+    <div class="entry-grid">
+      <div class="field"><label>날짜 <span class="req">*</span></label><input type="date" id="w-date"></div>
+      <div class="field"><label>체중 kg <span class="req">*</span></label><input type="number" step="0.1" id="w-weight" placeholder="86.0"></div>
+    </div>
+    <div class="entry-foot">
+      <div class="live-preview" id="w-status">첫 체중을 기록하면 주간 추세가 시작됩니다</div>
+      <button id="w-save">체중 저장</button>
+    </div>
+    <div class="hint">주 1회 · 같은 요일 · 아침 공복 · 화장실 다녀온 후 — 하루하루 값은 노이즈, 추세가 신호</div>
+  </div>
+  <div class="charts" id="w-charts" style="display:none"></div>
+  <div class="table-scroll" id="w-table-wrap" style="display:none">
+    <table>
+      <thead><tr><th>날짜</th><th>체중</th><th>직전 대비</th><th></th></tr></thead>
+      <tbody id="w-table-body"></tbody>
+    </table>
+  </div>
+
   <!-- 입력 -->
-  <div class="sec-label"><span class="n">02</span> 측정 입력 <span class="edit-badge" id="edit-badge"></span></div>
+  <div class="sec-label"><span class="n">03</span> 측정 입력 <span class="edit-badge" id="edit-badge"></span></div>
   <div class="entry" id="entry">
     <div class="entry-grid">
       <div class="field"><label>날짜 <span class="req">*</span></label><input type="date" id="in-date"></div>
@@ -347,13 +368,13 @@
   </div>
 
   <!-- 추세 -->
-  <div class="sec-label"><span class="n">03</span> 추세</div>
+  <div class="sec-label"><span class="n">04</span> 추세</div>
   <div class="charts" id="charts">
     <div class="empty-note" style="grid-column:1/-1">기록이 2건 이상 쌓이면 추세 그래프가 나타납니다</div>
   </div>
 
   <!-- 기록 테이블 -->
-  <div class="sec-label"><span class="n">04</span> 전체 기록</div>
+  <div class="sec-label"><span class="n">05</span> 전체 기록</div>
   <div class="toolbar">
     <button class="ghost" id="btn-export">JSON 내보내기</button>
     <button class="ghost" id="btn-import">가져오기</button>
@@ -372,7 +393,7 @@
   </div>
 
   <!-- 가이드 -->
-  <div class="sec-label"><span class="n">05</span> 해석 기준</div>
+  <div class="sec-label"><span class="n">06</span> 해석 기준</div>
   <div class="guide">
     <div class="guide-card">
       <h4><span class="tag">A</span>리컴포지션 판정 (기준점 대비)</h4>
@@ -486,6 +507,16 @@ const putRecord = (date, f) => api(`/body/records/${date}${Q()}`, {
   method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toWire(f)),
 });
 const deleteRecordApi = (date) => api(`/body/records/${date}${Q()}`, { method: "DELETE" });
+
+/* 주간 체중 (weight_records — 둘레와 별도 테이블) */
+let weights = []; // [{date, weight, note}] 정렬은 렌더 시
+async function reloadWeights() {
+  weights = (await api(`/weight/records${Q()}`)).map(w => ({ date: w.record_date, weight: w.weight_kg, note: w.note }));
+}
+const putWeight = (date, weight_kg) => api(`/weight/records/${date}${Q()}`, {
+  method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ weight_kg }),
+});
+const deleteWeightApi = (date) => api(`/weight/records/${date}${Q()}`, { method: "DELETE" });
 
 /* 프로필 셀렉트: /profiles 로딩 → 현재 선택 표시 → 전환 시 재조회 */
 async function initProfileSwitcher(onSwitch) {
@@ -898,8 +929,75 @@ $("file-import").addEventListener("change", e => {
   e.target.value = "";
 });
 
+/* ───────────────────────── 주간 체중 렌더 ───────────────── */
+function renderWeights() {
+  const ws = [...weights].sort((a, b) => a.date.localeCompare(b.date));
+
+  const st = $("w-status");
+  if (!ws.length) {
+    st.textContent = "첫 체중을 기록하면 주간 추세가 시작됩니다";
+  } else {
+    const last = ws[ws.length - 1];
+    let msg = `최근 ${last.date} · <strong>${last.weight.toFixed(1)}kg</strong>`;
+    if (ws.length >= 2) {
+      const prev = ws[ws.length - 2];
+      const d = last.weight - prev.weight;
+      const gap = Math.round((new Date(last.date) - new Date(prev.date)) / 86400000);
+      msg += ` · ${gap}일 전 대비 ${d > 0 ? "+" : ""}${d.toFixed(1)}kg`;
+    }
+    st.innerHTML = msg;
+  }
+
+  const cbox = $("w-charts");
+  cbox.innerHTML = "";
+  if (ws.length >= 2) {
+    cbox.style.display = "";
+    cbox.appendChild(chartCard({ key: "weight", label: "주간 체중", unit: "kg", dir: 0 }, ws));
+  } else {
+    cbox.style.display = "none";
+  }
+
+  const wrap = $("w-table-wrap"), tb = $("w-table-body");
+  if (!ws.length) { wrap.style.display = "none"; return; }
+  wrap.style.display = "";
+  tb.innerHTML = [...ws].reverse().map((w, i, arr) => {
+    const prev = arr[i + 1];
+    const d = prev ? w.weight - prev.weight : null;
+    const dTxt = d == null ? "–" : `${d > 0 ? "+" : ""}${d.toFixed(1)}kg`;
+    return `<tr${w.note ? ` title="${w.note.replace(/"/g, "&quot;")}"` : ""}>
+      <td>${w.date}</td>
+      <td>${w.weight.toFixed(1)}</td>
+      <td><span class="d flat">${dTxt}</span></td>
+      <td><button class="del" data-wdate="${w.date}" title="삭제">✕</button></td>
+    </tr>`;
+  }).join("");
+  tb.querySelectorAll(".del").forEach(b => b.addEventListener("click", async () => {
+    if (!confirm(`${b.dataset.wdate} 체중 기록을 삭제할까요?`)) return;
+    try {
+      await deleteWeightApi(b.dataset.wdate);
+      await reloadWeights();
+    } catch (err) { alert("삭제 실패: " + err.message); return; }
+    renderWeights();
+  }));
+}
+
+$("w-save").addEventListener("click", async () => {
+  const date = $("w-date").value;
+  const kg = parseFloat($("w-weight").value);
+  if (!date) return alert("날짜를 입력하세요.");
+  if (isNaN(kg)) return alert("체중을 입력하세요.");
+  const existing = weights.find(w => w.date === date);
+  if (existing && !confirm(`${date} 체중(${existing.weight}kg)이 이미 있습니다. 덮어쓸까요?`)) return;
+  try {
+    await putWeight(date, kg);
+    await reloadWeights();
+  } catch (err) { alert("저장 실패: " + err.message); return; }
+  $("w-weight").value = "";
+  renderWeights();
+});
+
 /* ───────────────────────── 초기화 ───────────────────────── */
-function renderAll() { renderTiles(); renderVerdict(); renderCharts(); renderTable(); }
+function renderAll() { renderTiles(); renderVerdict(); renderCharts(); renderTable(); renderWeights(); }
 
 /* 구버전(localStorage) 기록 → 서버 DB 1회 마이그레이션 */
 async function migrateLegacy() {
@@ -926,17 +1024,19 @@ async function migrateLegacy() {
 
 (async function init() {
   const today = new Date();
-  $("in-date").value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+  $("in-date").value = todayStr;
+  $("w-date").value = todayStr;
   $("in-height").value = prefs.lastHeight ?? 187;
   $("in-sex").value = prefs.lastSex ?? "m";
   updatePreview();
   try {
     await initProfileSwitcher(async () => {
       if (editingId) cancelEdit();
-      await reloadRecords();
+      await Promise.all([reloadRecords(), reloadWeights()]);
       renderAll();
     });
-    await reloadRecords();
+    await Promise.all([reloadRecords(), reloadWeights()]);
     await migrateLegacy();
   } catch (err) {
     const box = document.getElementById("verdict-box");

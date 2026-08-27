@@ -65,6 +65,21 @@ CREATE TABLE IF NOT EXISTS workout_sets (
 CREATE INDEX IF NOT EXISTS idx_wsession_profile_date ON workout_sessions(profile_id, session_date);
 CREATE INDEX IF NOT EXISTS idx_wsets_session          ON workout_sets(session_id);
 
+-- Weekly weigh-ins (/body page) — weight only, same-day-of-week fasting
+-- morning per the workout program rules. Separate from body_records
+-- (monthly circumference) so a weigh-in never requires tape measurements.
+CREATE TABLE IF NOT EXISTS weight_records (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id   INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    record_date  TEXT    NOT NULL,               -- ISO YYYY-MM-DD
+    weight_kg    REAL    NOT NULL,
+    note         TEXT,
+    created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (profile_id, record_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_weight_profile_date ON weight_records(profile_id, record_date);
+
 -- InBody records (/inbody page) — values transcribed from the printed
 -- InBody result sheet, one measurement per profile+date. Column names
 -- follow the sheet's official English terms (SMM, PBF, WHR, ...).

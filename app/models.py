@@ -179,6 +179,25 @@ class BodyRecord(BodyRecordIn):
     record_date: str
 
 
+class WeightRecordIn(BaseModel):
+    """Upsert payload for one weekly weigh-in (weight only)."""
+
+    weight_kg: float
+    note: Optional[str] = None
+
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _check(self):
+        if not 20 <= self.weight_kg <= 300:
+            raise ValueError("weight_kg must be 20..300")
+        return self
+
+
+class WeightRecord(WeightRecordIn):
+    record_date: str
+
+
 class InbodyRecordIn(BaseModel):
     """Upsert payload for one InBody measurement (transcribed from the sheet).
 
