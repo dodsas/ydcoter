@@ -182,19 +182,27 @@ class BodyRecord(BodyRecordIn):
 class InbodyRecordIn(BaseModel):
     """Upsert payload for one InBody measurement (transcribed from the sheet).
 
-    제지방량(LBM) / 단백질 목표 / 유지·감량 칼로리는 클라이언트에서 파생
-    계산하며 저장하지 않는다 (body_records와 같은 정책).
+    필드명은 결과지의 공식 영문 표기(SMM, PBF, WHR ...)를 따른다.
+    단백질 목표 / 유지·감량 칼로리는 클라이언트에서 파생 계산하며 저장하지
+    않는다. lean_body_mass_kg 는 결과지에 인쇄된 값이 있으면 저장하고,
+    없으면 클라이언트가 체중 − 체지방량으로 대체 계산한다.
     """
 
     weight_kg: float
-    skeletal_muscle_kg: float
-    body_fat_kg: float
-    body_fat_pct: float
+    skeletal_muscle_mass_kg: float
+    body_fat_mass_kg: float
+    percent_body_fat: float
+    bmi: Optional[float] = None
+    lean_body_mass_kg: Optional[float] = None
+    total_body_water_l: Optional[float] = None
+    protein_kg: Optional[float] = None
+    minerals_kg: Optional[float] = None
     visceral_fat_level: Optional[int] = None
-    whr: Optional[float] = None
+    waist_hip_ratio: Optional[float] = None
     bmr_kcal: Optional[int] = None
     fat_control_kg: Optional[float] = None
     muscle_control_kg: Optional[float] = None
+    inbody_score: Optional[int] = None
     note: Optional[str] = None
 
     model_config = {"extra": "forbid"}
@@ -203,19 +211,37 @@ class InbodyRecordIn(BaseModel):
     def _check(self):
         if self.weight_kg <= 0:
             raise ValueError("weight_kg must be > 0")
-        if self.skeletal_muscle_kg <= 0:
-            raise ValueError("skeletal_muscle_kg must be > 0")
-        if not 0 <= self.body_fat_kg < self.weight_kg:
-            raise ValueError("body_fat_kg must be 0 ≤ x < weight_kg")
-        if not 0 <= self.body_fat_pct < 70:
-            raise ValueError("body_fat_pct must be 0..70")
+        if self.skeletal_muscle_mass_kg <= 0:
+            raise ValueError("skeletal_muscle_mass_kg must be > 0")
+        if not 0 <= self.body_fat_mass_kg < self.weight_kg:
+            raise ValueError("body_fat_mass_kg must be 0 ≤ x < weight_kg")
+        if not 0 <= self.percent_body_fat < 70:
+            raise ValueError("percent_body_fat must be 0..70")
+        if self.bmi is not None and not 10 <= self.bmi <= 60:
+            raise ValueError("bmi must be 10..60")
+        if self.lean_body_mass_kg is not None and not 0 < self.lean_body_mass_kg <= self.weight_kg:
+            raise ValueError("lean_body_mass_kg must be 0 < x ≤ weight_kg")
+        if self.total_body_water_l is not None and not 0 < self.total_body_water_l <= self.weight_kg:
+            raise ValueError("total_body_water_l must be 0 < x ≤ weight_kg")
+        if self.protein_kg is not None and not 0 < self.protein_kg < self.weight_kg:
+            raise ValueError("protein_kg must be 0 < x < weight_kg")
+        if self.minerals_kg is not None and not 0 < self.minerals_kg < self.weight_kg:
+            raise ValueError("minerals_kg must be 0 < x < weight_kg")
         if self.visceral_fat_level is not None and not 1 <= self.visceral_fat_level <= 30:
             raise ValueError("visceral_fat_level must be 1..30")
-        if self.whr is not None and not 0.3 <= self.whr <= 1.5:
-            raise ValueError("whr must be 0.3..1.5")
+        if self.waist_hip_ratio is not None and not 0.3 <= self.waist_hip_ratio <= 1.5:
+            raise ValueError("waist_hip_ratio must be 0.3..1.5")
         if self.bmr_kcal is not None and not 500 <= self.bmr_kcal <= 4000:
             raise ValueError("bmr_kcal must be 500..4000")
+        if self.inbody_score is not None and not 0 <= self.inbody_score <= 100:
+            raise ValueError("inbody_score must be 0..100")
         return self
+
+
+class InbodyRecordCreate(InbodyRecordIn):
+    """POST /inbody payload — the measurement date rides in the body."""
+
+    date: str  # ISO YYYY-MM-DD
 
 
 class InbodyRecord(InbodyRecordIn):

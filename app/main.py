@@ -34,6 +34,7 @@ from app.models import (
     BodyRecordIn,
     DailyNutrition,
     InbodyRecord,
+    InbodyRecordCreate,
     InbodyRecordIn,
     Measurement,
     NutrientTotal,
@@ -670,10 +671,32 @@ def body_record_delete(
 # ===========================================================================
 
 _INBODY_COLS = (
-    "weight_kg", "skeletal_muscle_kg", "body_fat_kg", "body_fat_pct",
-    "visceral_fat_level", "whr", "bmr_kcal",
-    "fat_control_kg", "muscle_control_kg", "note",
+    "weight_kg", "skeletal_muscle_mass_kg", "body_fat_mass_kg", "percent_body_fat",
+    "bmi", "lean_body_mass_kg", "total_body_water_l", "protein_kg", "minerals_kg",
+    "visceral_fat_level", "waist_hip_ratio", "bmr_kcal",
+    "fat_control_kg", "muscle_control_kg", "inbody_score", "note",
 )
+
+
+def _inbody_upsert(record_date: str, body: InbodyRecordIn, profile: Optional[str]) -> InbodyRecord:
+    """Shared upsert for PUT /inbody/records/{date} and POST /inbody."""
+    if not _DATE_RE.match(record_date):
+        raise HTTPException(422, "date must be ISO YYYY-MM-DD")
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
+    values = [getattr(body, c) for c in _INBODY_COLS]
+    with get_conn() as conn:
+        conn.execute(
+            f"""
+            INSERT INTO inbody_records (profile_id, record_date, {", ".join(_INBODY_COLS)})
+            VALUES ({", ".join("?" * (2 + len(_INBODY_COLS)))})
+            ON CONFLICT (profile_id, record_date) DO UPDATE SET
+                {", ".join(f"{c} = excluded.{c}" for c in _INBODY_COLS)}
+            """,
+            tuple([pid, record_date, *values]),
+        )
+        conn.commit()
+    return InbodyRecord(record_date=record_date, **{c: getattr(body, c) for c in _INBODY_COLS})
 
 
 @app.get("/inbody/records", response_model=List[InbodyRecord])
@@ -694,6 +717,15 @@ def inbody_records(profile: Optional[str] = Query(None)) -> List[InbodyRecord]:
     return [InbodyRecord(**dict(r)) for r in rows]
 
 
+@app.post("/inbody", response_model=InbodyRecord)
+def inbody_record_create(
+    body: InbodyRecordCreate,
+    profile: Optional[str] = Query(None),
+) -> InbodyRecord:
+    """Create/replace a record with the date in the payload (curl-friendly)."""
+    return _inbody_upsert(body.date, body, profile)
+
+
 @app.put("/inbody/records/{record_date}", response_model=InbodyRecord)
 def inbody_record_upsert(
     record_date: str,
@@ -701,23 +733,7 @@ def inbody_record_upsert(
     profile: Optional[str] = Query(None),
 ) -> InbodyRecord:
     """Insert or replace the record for one date (date = natural key)."""
-    if not _DATE_RE.match(record_date):
-        raise HTTPException(422, "record_date must be ISO YYYY-MM-DD")
-    with get_local_conn() as lconn:
-        pid = _resolve_profile_id(lconn, profile)
-    values = [getattr(body, c) for c in _INBODY_COLS]
-    with get_conn() as conn:
-        conn.execute(
-            f"""
-            INSERT INTO inbody_records (profile_id, record_date, {", ".join(_INBODY_COLS)})
-            VALUES ({", ".join("?" * (2 + len(_INBODY_COLS)))})
-            ON CONFLICT (profile_id, record_date) DO UPDATE SET
-                {", ".join(f"{c} = excluded.{c}" for c in _INBODY_COLS)}
-            """,
-            tuple([pid, record_date, *values]),
-        )
-        conn.commit()
-    return InbodyRecord(record_date=record_date, **body.model_dump())
+    return _inbody_upsert(record_date, body, profile)
 
 
 @app.delete("/inbody/records/{record_date}")

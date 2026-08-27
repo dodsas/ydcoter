@@ -66,24 +66,32 @@ CREATE INDEX IF NOT EXISTS idx_wsession_profile_date ON workout_sessions(profile
 CREATE INDEX IF NOT EXISTS idx_wsets_session          ON workout_sets(session_id);
 
 -- InBody records (/inbody page) — values transcribed from the printed
--- InBody result sheet, one measurement per profile+date. Derived values
--- (제지방량 LBM, 단백질 목표 g, 유지/감량 칼로리) are computed client-side,
--- never stored — same policy as body_records.
+-- InBody result sheet, one measurement per profile+date. Column names
+-- follow the sheet's official English terms (SMM, PBF, WHR, ...).
+-- 단백질 목표 g / 유지·감량 칼로리 are computed client-side, never stored;
+-- lean_body_mass_kg is stored when printed on the sheet, otherwise the
+-- client falls back to 체중 − 체지방량.
 CREATE TABLE IF NOT EXISTS inbody_records (
-    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    profile_id          INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-    record_date         TEXT    NOT NULL,   -- ISO YYYY-MM-DD
-    weight_kg           REAL    NOT NULL,   -- 체중
-    skeletal_muscle_kg  REAL    NOT NULL,   -- 골격근량 (SMM)
-    body_fat_kg         REAL    NOT NULL,   -- 체지방량
-    body_fat_pct        REAL    NOT NULL,   -- 체지방률 (결과지 인쇄값 그대로)
-    visceral_fat_level  INTEGER,            -- 내장지방레벨 (기준 10 이하)
-    whr                 REAL,               -- 복부지방률 WHR (기준 0.90 이하, 남성)
-    bmr_kcal            INTEGER,            -- 기초대사량
-    fat_control_kg      REAL,               -- 지방조절 권고 (음수 = 감량)
-    muscle_control_kg   REAL,               -- 근육조절 권고 (양수 = 증량)
-    note                TEXT,
-    created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+    id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id               INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    record_date              TEXT    NOT NULL,   -- ISO YYYY-MM-DD
+    weight_kg                REAL    NOT NULL,   -- 체중
+    skeletal_muscle_mass_kg  REAL    NOT NULL,   -- 골격근량 (SMM)
+    body_fat_mass_kg         REAL    NOT NULL,   -- 체지방량
+    percent_body_fat         REAL    NOT NULL,   -- 체지방률 PBF (결과지 인쇄값 그대로)
+    bmi                      REAL,               -- BMI
+    lean_body_mass_kg        REAL,               -- 제지방량 LBM (결과지 인쇄값)
+    total_body_water_l       REAL,               -- 체수분
+    protein_kg               REAL,               -- 단백질 (체성분)
+    minerals_kg              REAL,               -- 무기질
+    visceral_fat_level       INTEGER,            -- 내장지방레벨 (기준 10 이하)
+    waist_hip_ratio          REAL,               -- 복부지방률 WHR (기준 0.90 이하, 남성)
+    bmr_kcal                 INTEGER,            -- 기초대사량
+    fat_control_kg           REAL,               -- 지방조절 권고 (음수 = 감량)
+    muscle_control_kg        REAL,               -- 근육조절 권고 (양수 = 증량)
+    inbody_score             INTEGER,            -- 인바디 점수
+    note                     TEXT,
+    created_at               TEXT    NOT NULL DEFAULT (datetime('now')),
     UNIQUE (profile_id, record_date)
 );
 

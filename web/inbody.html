@@ -214,7 +214,7 @@
 
   /* ─── 기록 테이블 ──────────────────────────────────────── */
   .table-scroll { overflow-x: auto; border: 1px solid var(--border); background: var(--surface-1); }
-  table { border-collapse: collapse; width: 100%; min-width: 980px; }
+  table { border-collapse: collapse; width: 100%; min-width: 1120px; }
   th, td {
     padding: 9px 12px; text-align: right;
     font-family: var(--font-mono); font-size: 12.5px;
@@ -326,12 +326,18 @@
       <div class="field"><label>골격근량 kg <span class="req">*</span></label><input type="number" step="0.1" id="in-smm" placeholder="33.9"></div>
       <div class="field"><label>체지방량 kg <span class="req">*</span></label><input type="number" step="0.1" id="in-fat" placeholder="25.9"></div>
       <div class="field"><label>체지방률 % <span class="req">*</span></label><input type="number" step="0.1" id="in-fatpct" placeholder="29.8"></div>
+      <div class="field"><label>BMI</label><input type="number" step="0.1" id="in-bmi" placeholder="24.9"></div>
+      <div class="field"><label>제지방량 kg</label><input type="number" step="0.1" id="in-lbm" placeholder="61.0"></div>
+      <div class="field"><label>체수분 L</label><input type="number" step="0.1" id="in-tbw" placeholder="44.8"></div>
+      <div class="field"><label>단백질 kg</label><input type="number" step="0.1" id="in-protein" placeholder="11.9"></div>
+      <div class="field"><label>무기질 kg</label><input type="number" step="0.01" id="in-minerals" placeholder="4.34"></div>
       <div class="field"><label>내장지방 Lv</label><input type="number" step="1" id="in-vfl" placeholder="10"></div>
       <div class="field"><label>복부지방률 WHR</label><input type="number" step="0.01" id="in-whr" placeholder="0.91"></div>
       <div class="field"><label>기초대사량 kcal</label><input type="number" step="1" id="in-bmr" placeholder="1688"></div>
       <div class="field"><label>지방조절 kg</label><input type="number" step="0.1" id="in-fatctl" placeholder="-14.3"></div>
       <div class="field"><label>근육조절 kg</label><input type="number" step="0.1" id="in-musclectl" placeholder="+4.4"></div>
-      <div class="field wide"><label>메모</label><input type="text" id="in-note" placeholder="측정 조건, 인바디 점수 등"></div>
+      <div class="field"><label>인바디 점수</label><input type="number" step="1" id="in-score" placeholder="61"></div>
+      <div class="field wide"><label>메모</label><input type="text" id="in-note" placeholder="측정 조건 등"></div>
     </div>
     <div class="entry-foot">
       <div class="live-preview" id="live-preview">필수값(<span style="color:var(--series-1)">*</span>)을 입력하면 제지방량·단백질 목표가 계산됩니다</div>
@@ -359,11 +365,11 @@
   <div class="table-scroll">
     <table>
       <thead><tr>
-        <th>날짜</th><th>체중</th><th>골격근</th><th>체지방</th><th>체지방률</th><th>제지방</th>
-        <th>내장지방</th><th>WHR</th><th>BMR</th><th>지방조절</th><th>근육조절</th><th></th>
+        <th>날짜</th><th>체중</th><th>골격근</th><th>체지방</th><th>체지방률</th><th>BMI</th><th>제지방</th>
+        <th>내장지방</th><th>WHR</th><th>BMR</th><th>지방조절</th><th>근육조절</th><th>점수</th><th></th>
       </tr></thead>
       <tbody id="table-body">
-        <tr><td colspan="12" style="text-align:center;color:var(--muted);padding:24px">기록 없음</td></tr>
+        <tr><td colspan="14" style="text-align:center;color:var(--muted);padding:24px">기록 없음</td></tr>
       </tbody>
     </table>
   </div>
@@ -401,7 +407,7 @@
   </div>
 
   <div class="footnote">
-    <strong>계산식</strong> — 제지방량(LBM) = 체중 − 체지방량 ·
+    <strong>계산식</strong> — 제지방량(LBM) = 결과지 인쇄값 우선, 없으면 체중 − 체지방량 ·
     단백질 목표 = LBM × 2.0~2.2g/일 (최소 방어선 LBM × 1.8g) ·
     유지 칼로리 = BMR × 1.4~1.5 · 감량 섭취 = 유지 − 400~500kcal.
     파생값은 저장하지 않고 표시할 때마다 계산합니다.
@@ -457,9 +463,10 @@ async function api(path, opts) {
   return res.json();
 }
 const FIELD2WIRE = {
-  weight: "weight_kg", smm: "skeletal_muscle_kg", fat: "body_fat_kg", fatpct: "body_fat_pct",
-  vfl: "visceral_fat_level", whr: "whr", bmr: "bmr_kcal",
-  fatctl: "fat_control_kg", musclectl: "muscle_control_kg", note: "note",
+  weight: "weight_kg", smm: "skeletal_muscle_mass_kg", fat: "body_fat_mass_kg", fatpct: "percent_body_fat",
+  bmi: "bmi", lbm: "lean_body_mass_kg", tbw: "total_body_water_l", protein: "protein_kg", minerals: "minerals_kg",
+  vfl: "visceral_fat_level", whr: "waist_hip_ratio", bmr: "bmr_kcal",
+  fatctl: "fat_control_kg", musclectl: "muscle_control_kg", score: "inbody_score", note: "note",
 };
 function fromWire(w) {
   const r = { id: w.record_date, date: w.record_date };
@@ -497,10 +504,11 @@ async function initProfileSwitcher(onSwitch) {
 }
 
 /* ───────────────────────── 파생 계산 ────────────────────────
-   LBM = 체중 − 체지방량. 단백질 목표 = LBM × 2.0~2.2g (최소 1.8g).
+   LBM = 결과지 인쇄값 우선, 없으면 체중 − 체지방량.
+   단백질 목표 = LBM × 2.0~2.2g (최소 1.8g).
    유지 kcal = BMR × 1.4~1.5, 감량 = 유지 − 400~500. */
 function derive(r) {
-  const lean = (r.weight != null && r.fat != null) ? r.weight - r.fat : null;
+  const lean = r.lbm ?? ((r.weight != null && r.fat != null) ? r.weight - r.fat : null);
   const protMin  = lean != null ? lean * 2.0 : null;
   const protMax  = lean != null ? lean * 2.2 : null;
   const protFloor = lean != null ? lean * 1.8 : null;
@@ -530,6 +538,8 @@ const METRICS = [
   { key: "vfl",    label: "내장지방",   unit: "Lv",   dir: -1 },
   { key: "whr",    label: "복부지방률", unit: "",     dir: -1 },
   { key: "bmr",    label: "기초대사량", unit: "kcal", dir: +1 },
+  { key: "bmi",    label: "BMI",        unit: "",     dir: -1 },
+  { key: "score",  label: "인바디 점수", unit: "점",  dir: +1 },
 ];
 function val(r, key) {
   if (key === "lean") return derive(r).lean;
@@ -636,7 +646,7 @@ function renderTable() {
   const rs = sorted();
   const tb = document.getElementById("table-body");
   if (!rs.length) {
-    tb.innerHTML = `<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:24px">기록 없음</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="14" style="text-align:center;color:var(--muted);padding:24px">기록 없음</td></tr>`;
     return;
   }
   tb.innerHTML = rs.map((r, i) => {
@@ -654,9 +664,9 @@ function renderTable() {
     const ctl = (v) => v == null ? "<td>–</td>" : `<td>${v > 0 ? "+" : ""}${v.toFixed(1)}</td>`;
     return `<tr data-id="${r.id}" class="${r.id === editingId ? "editing" : ""}" title="${r.note ? r.note.replace(/"/g, "&quot;") + " · " : ""}클릭하여 수정">
       <td>${r.date}${i === 0 ? '<span class="day0-badge">DAY 0</span>' : ""}</td>
-      ${cell("weight", 0)}${cell("smm", +1)}${cell("fat", -1)}${cell("fatpct", -1, 1, "%")}${cell("lean", +1)}
+      ${cell("weight", 0)}${cell("smm", +1)}${cell("fat", -1)}${cell("fatpct", -1, 1, "%")}${cell("bmi", -1)}${cell("lean", +1)}
       ${cell("vfl", -1, 0)}${cell("whr", -1, 2)}${cell("bmr", +1, 0)}
-      ${ctl(r.fatctl)}${ctl(r.musclectl)}
+      ${ctl(r.fatctl)}${ctl(r.musclectl)}${cell("score", +1, 0)}
       <td><button class="del" data-id="${r.id}" title="삭제">✕</button></td>
     </tr>`;
   }).join("");
@@ -762,7 +772,7 @@ function chartCard(metric, rs) {
 /* ───────────────────────── 입력 ─────────────────────────── */
 const $ = id => document.getElementById(id);
 let editingId = null;
-const NUM_INPUT_IDS = ["in-weight","in-smm","in-fat","in-fatpct","in-vfl","in-whr","in-bmr","in-fatctl","in-musclectl"];
+const NUM_INPUT_IDS = ["in-weight","in-smm","in-fat","in-fatpct","in-bmi","in-lbm","in-tbw","in-protein","in-minerals","in-vfl","in-whr","in-bmr","in-fatctl","in-musclectl","in-score"];
 
 function startEdit(r) {
   editingId = r.id;
@@ -770,8 +780,11 @@ function startEdit(r) {
   $("in-date").value = r.date;
   set("in-weight", r.weight); set("in-smm", r.smm);
   set("in-fat", r.fat); set("in-fatpct", r.fatpct);
+  set("in-bmi", r.bmi); set("in-lbm", r.lbm); set("in-tbw", r.tbw);
+  set("in-protein", r.protein); set("in-minerals", r.minerals);
   set("in-vfl", r.vfl); set("in-whr", r.whr); set("in-bmr", r.bmr);
   set("in-fatctl", r.fatctl); set("in-musclectl", r.musclectl);
+  set("in-score", r.score);
   set("in-note", r.note);
   $("btn-save").textContent = "수정 저장";
   $("btn-cancel-edit").style.display = "";
@@ -805,8 +818,11 @@ function readForm() {
     date: $("in-date").value,
     weight: n("in-weight"), smm: n("in-smm"),
     fat: n("in-fat"), fatpct: n("in-fatpct"),
+    bmi: n("in-bmi"), lbm: n("in-lbm"), tbw: n("in-tbw"),
+    protein: n("in-protein"), minerals: n("in-minerals"),
     vfl: int("in-vfl"), whr: n("in-whr"), bmr: int("in-bmr"),
     fatctl: n("in-fatctl"), musclectl: n("in-musclectl"),
+    score: int("in-score"),
     note: note || null,
   };
 }
