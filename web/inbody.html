@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0d0d0d">
-<title>BODY LOG — 둘레 측정 기록</title>
+<title>INBODY LOG — 체성분 측정 기록</title>
 <link rel="icon" type="image/svg+xml" href="/assets/doctor.svg?v={{V}}" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -162,6 +162,7 @@
     border-radius: 0; transition: border-color .15s;
   }
   .field input:focus, .field select:focus { outline: none; border-color: var(--series-1); }
+  .field.wide { grid-column: 1 / -1; }
   .entry-foot {
     display: flex; align-items: center; justify-content: space-between;
     flex-wrap: wrap; gap: 14px; margin-top: 18px; padding-top: 16px;
@@ -213,7 +214,7 @@
 
   /* ─── 기록 테이블 ──────────────────────────────────────── */
   .table-scroll { overflow-x: auto; border: 1px solid var(--border); background: var(--surface-1); }
-  table { border-collapse: collapse; width: 100%; min-width: 900px; }
+  table { border-collapse: collapse; width: 100%; min-width: 980px; }
   th, td {
     padding: 9px 12px; text-align: right;
     font-family: var(--font-mono); font-size: 12.5px;
@@ -278,14 +279,12 @@
     .header-meta { text-align: left; width: 100%; }
     .page-nav { justify-content: flex-start; }
     .page-nav a { padding: 8px 14px; font-size: 12px; }
-    /* 스탯 타일: 한 줄에 2개 */
     .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .tile { padding: 12px 12px 10px; }
     .tile .value { font-size: 30px; }
     .tile .unit { font-size: 13px; }
     .tile .sub { font-size: 11px; min-height: 0; }
     .entry { padding: 16px 14px; }
-    /* 입력칸: 정확히 1:1 균등폭 (minmax(0,·)로 내용 최소폭 무시) */
     .entry-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .field input, .field select { padding: 9px 8px; min-width: 0; }
     .field input[type="date"] { padding-left: 5px; padding-right: 5px; }
@@ -296,13 +295,13 @@
 <div class="wrap">
 
   <header>
-    <h1>Body<span class="accent">/</span>Log</h1>
+    <h1>InBody<span class="accent">/</span>Log</h1>
     <div class="header-meta">
-      NAVY METHOD · 월 1회 측정 · 프로필 <select id="profile-select" class="profile-mini"><option>…</option></select><br>
+      체성분 분석 · 결과지 옮겨적기 · 프로필 <select id="profile-select" class="profile-mini"><option>…</option></select><br>
       <strong id="record-count">기록 0건</strong> · <span id="days-since">Day 0</span>
       <nav class="page-nav">
         <a href="/" data-keep-profile style="color:var(--series-2);border-color:var(--series-2)">Workout</a>
-        <a href="/inbody" data-keep-profile>InBody</a>
+        <a href="/body" data-keep-profile>Body Log</a>
         <a href="/nutrition">Nutrition</a>
         <a href="/dashboard">Records</a>
       </nav>
@@ -315,7 +314,7 @@
   <!-- 현재 상태 타일 -->
   <div class="sec-label"><span class="n">01</span> 현재 상태 <span id="latest-date" style="letter-spacing:0;text-transform:none"></span></div>
   <div class="tiles" id="tiles">
-    <div class="empty-note" style="grid-column:1/-1">아직 기록이 없습니다. 아래에 첫 측정을 입력하면 그날이 <strong>Day 0 기준점</strong>이 됩니다.</div>
+    <div class="empty-note" style="grid-column:1/-1">아직 기록이 없습니다. 아래에 첫 인바디 결과를 입력하면 그날이 <strong>Day 0 기준점</strong>이 됩니다.</div>
   </div>
 
   <!-- 입력 -->
@@ -323,27 +322,25 @@
   <div class="entry" id="entry">
     <div class="entry-grid">
       <div class="field"><label>날짜 <span class="req">*</span></label><input type="date" id="in-date"></div>
-      <div class="field"><label>체중 kg <span class="req">*</span></label><input type="number" step="0.1" id="in-weight" placeholder="86.0"></div>
-      <div class="field"><label>키 cm <span class="req">*</span></label><input type="number" step="0.1" id="in-height" placeholder="187"></div>
-      <div class="field"><label>성별</label>
-        <select id="in-sex"><option value="m">남성</option><option value="f">여성</option></select>
-      </div>
-      <div class="field"><label>목 cm <span class="req">*</span></label><input type="number" step="0.1" id="in-neck" placeholder="38.0"></div>
-      <div class="field"><label>허리 cm <span class="req">*</span></label><input type="number" step="0.1" id="in-waist" placeholder="88.0"></div>
-      <div class="field" id="hip-field" style="display:none"><label>엉덩이 cm <span class="req">*</span></label><input type="number" step="0.1" id="in-hip"></div>
-      <div class="field"><label>가슴 cm</label><input type="number" step="0.1" id="in-chest"></div>
-      <div class="field"><label>팔뚝 cm</label><input type="number" step="0.1" id="in-arm"></div>
-      <div class="field"><label>어깨 cm</label><input type="number" step="0.1" id="in-shoulder"></div>
-      <div class="field"><label>허벅지 cm</label><input type="number" step="0.1" id="in-thigh"></div>
+      <div class="field"><label>체중 kg <span class="req">*</span></label><input type="number" step="0.1" id="in-weight" placeholder="86.9"></div>
+      <div class="field"><label>골격근량 kg <span class="req">*</span></label><input type="number" step="0.1" id="in-smm" placeholder="33.9"></div>
+      <div class="field"><label>체지방량 kg <span class="req">*</span></label><input type="number" step="0.1" id="in-fat" placeholder="25.9"></div>
+      <div class="field"><label>체지방률 % <span class="req">*</span></label><input type="number" step="0.1" id="in-fatpct" placeholder="29.8"></div>
+      <div class="field"><label>내장지방 Lv</label><input type="number" step="1" id="in-vfl" placeholder="10"></div>
+      <div class="field"><label>복부지방률 WHR</label><input type="number" step="0.01" id="in-whr" placeholder="0.91"></div>
+      <div class="field"><label>기초대사량 kcal</label><input type="number" step="1" id="in-bmr" placeholder="1688"></div>
+      <div class="field"><label>지방조절 kg</label><input type="number" step="0.1" id="in-fatctl" placeholder="-14.3"></div>
+      <div class="field"><label>근육조절 kg</label><input type="number" step="0.1" id="in-musclectl" placeholder="+4.4"></div>
+      <div class="field wide"><label>메모</label><input type="text" id="in-note" placeholder="측정 조건, 인바디 점수 등"></div>
     </div>
     <div class="entry-foot">
-      <div class="live-preview" id="live-preview">필수값(<span style="color:var(--series-1)">*</span>)을 입력하면 체지방률이 미리 계산됩니다</div>
+      <div class="live-preview" id="live-preview">필수값(<span style="color:var(--series-1)">*</span>)을 입력하면 제지방량·단백질 목표가 계산됩니다</div>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="ghost" id="btn-cancel-edit" style="display:none">수정 취소</button>
         <button id="btn-save">기록 저장</button>
       </div>
     </div>
-    <div class="hint">아침 공복 · 화장실 다녀온 후 · 배에 힘 빼고 숨 편하게 내쉰 상태 · 허리는 배꼽 높이 · 목은 후두 바로 아래</div>
+    <div class="hint">인바디 결과지의 인쇄값을 그대로 옮겨 적으세요 · 같은 기기·같은 시간대(아침 공복) 측정이 비교에 유리 · 재측정 주기 3개월 권장</div>
   </div>
 
   <!-- 추세 -->
@@ -362,8 +359,8 @@
   <div class="table-scroll">
     <table>
       <thead><tr>
-        <th>날짜</th><th>체중</th><th>체지방률</th><th>제지방량</th><th>FFMI</th>
-        <th>목</th><th>허리</th><th>가슴</th><th>팔뚝</th><th>어깨</th><th>허벅지</th><th></th>
+        <th>날짜</th><th>체중</th><th>골격근</th><th>체지방</th><th>체지방률</th><th>제지방</th>
+        <th>내장지방</th><th>WHR</th><th>BMR</th><th>지방조절</th><th>근육조절</th><th></th>
       </tr></thead>
       <tbody id="table-body">
         <tr><td colspan="12" style="text-align:center;color:var(--muted);padding:24px">기록 없음</td></tr>
@@ -375,41 +372,39 @@
   <div class="sec-label"><span class="n">05</span> 해석 기준</div>
   <div class="guide">
     <div class="guide-card">
-      <h4><span class="tag">A</span>리컴포지션 판정 (기준점 대비)</h4>
+      <h4><span class="tag">A</span>단백질 목표 (LBM 기준)</h4>
       <ul>
-        <li><strong>허리 ↓ + 팔·가슴·허벅지 ↑</strong> = 교과서적 리컴포지션</li>
-        <li><strong>허리 유지 + 사지 ↑</strong> = 정상 진행</li>
-        <li><strong>허리 ↓ + 사지 ↓</strong> = 근손실 주의, 섭취·강도 점검</li>
-        <li><strong>모두 유지</strong> = 4주 더 관찰 후 변수 조정</li>
-        <li>체중은 거의 안 변해도 됨 — 둘레가 신호</li>
+        <li>체지방률이 높을수록 총체중 기준은 과대계산 — <strong>제지방량(LBM) × 2.0~2.2g</strong>으로 산출</li>
+        <li>예: LBM 61kg → <strong>122~134g/일</strong>, 실용 목표 125g</li>
+        <li><strong>최소 방어선 110g</strong> — 감량 중 근손실 방지 하한</li>
+        <li>위 입력폼이 최신 기록 기준으로 자동 계산해 표시</li>
       </ul>
     </div>
     <div class="guide-card">
-      <h4><span class="tag">B</span>체지방률 구간 (남성)</h4>
+      <h4><span class="tag">B</span>칼로리 (BMR 기준)</h4>
       <ul>
-        <li><strong>6–13%</strong> 운동선수 수준</li>
-        <li><strong>14–17%</strong> 피트니스 수준</li>
-        <li><strong>18–24%</strong> 평균</li>
-        <li><strong>25%+</strong> 관리 필요</li>
-        <li>Navy 공식은 동양인에서 <strong>2~3%p 낮게</strong> 나올 수 있음 — 절대값보다 변화량으로 판단</li>
+        <li>유지 = <strong>BMR × 1.4~1.5</strong> (사무직 + 주 3~4회 운동)</li>
+        <li>감량 = 유지 − <strong>400~500kcal</strong> (온건한 적자)</li>
+        <li>적자 800kcal↑는 근손실 위험 — 초보자 이득 구간(적자 중 근성장 가능)을 살리려면 온건하게</li>
+        <li>지방조절(−)과 근육조절(+)이 동시에 걸려 있다면 지금이 그 구간</li>
       </ul>
     </div>
     <div class="guide-card">
-      <h4><span class="tag">C</span>측정 규칙</h4>
+      <h4><span class="tag">C</span>재측정 판정 (기준점 대비)</h4>
       <ul>
-        <li><strong>월 1회 고정</strong> — 주 단위 변동은 노이즈</li>
-        <li>같은 날짜·아침 공복·같은 부위</li>
-        <li>팔뚝: 힘줬을 때 가장 두꺼운 지점</li>
-        <li>가슴: 유두 높이, 숨 내쉰 상태</li>
-        <li>허벅지: 사타구니 아래 가장 두꺼운 지점</li>
+        <li><strong>골격근 유지/↑ + 체지방률 ↓</strong> = 정확히 궤도 — 유지</li>
+        <li><strong>골격근 ↓ + 체지방률 ↓</strong> = 근손실 동반 — 단백질·적자 점검</li>
+        <li><strong>내장지방 Lv 10 이하</strong>가 기준선 — 지방간·요산 등 대사지표와 같은 뿌리, 감량 성공 시 동반 개선 기대</li>
+        <li>복부지방률(WHR) 남성 기준 <strong>0.90 이하</strong></li>
       </ul>
     </div>
   </div>
 
   <div class="footnote">
-    <strong>계산식</strong> — 체지방률(남): 495 ÷ [1.0324 − 0.19077·log₁₀(허리−목) + 0.15456·log₁₀(키)] − 450 ·
-    체지방률(여): 495 ÷ [1.29579 − 0.35004·log₁₀(허리+엉덩이−목) + 0.22100·log₁₀(키)] − 450 ·
-    제지방량 = 체중 × (1 − 체지방률) · FFMI = 제지방량 ÷ 키²(m) — 목표 <strong>FFMI 22</strong>.
+    <strong>계산식</strong> — 제지방량(LBM) = 체중 − 체지방량 ·
+    단백질 목표 = LBM × 2.0~2.2g/일 (최소 방어선 LBM × 1.8g) ·
+    유지 칼로리 = BMR × 1.4~1.5 · 감량 섭취 = 유지 − 400~500kcal.
+    파생값은 저장하지 않고 표시할 때마다 계산합니다.
     기록은 서버 DB(프로필별)에 저장되어 어느 기기에서든 동일하게 보입니다. JSON 내보내기는 백업용입니다.
   </div>
 
@@ -420,10 +415,8 @@
 <script>
 "use strict";
 /* ───────────────────────── 저장소 (서버 DB) ─────────────────
-   기록은 /body/records API(→ Turso/SQLite)에 저장. localStorage는
-   UI 편의값(키·성별)과 구버전 데이터 마이그레이션에만 사용. */
-const LEGACY_KEY = "bodylog.v1";
-const PREFS_KEY  = "bodylog.prefs";
+   기록은 /inbody/records API(→ Turso/SQLite)에 저장. localStorage는
+   프로필 선택 등 UI 편의값에만 사용. */
 // 우선순위: URL ?profile= (공유/즐겨찾기용) > localStorage (사이트 공통 선택)
 let PROFILE_SLUG = (() => {
   try {
@@ -453,8 +446,6 @@ function persistProfile(slug) {
 }
 
 let db = { records: [] };
-const prefs = (() => { try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; } catch { return {}; } })();
-const savePrefs = () => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch {} };
 
 async function api(path, opts) {
   const res = await fetch(path, opts);
@@ -466,26 +457,27 @@ async function api(path, opts) {
   return res.json();
 }
 const FIELD2WIRE = {
-  weight: "weight_kg", height: "height_cm", neck: "neck_cm", waist: "waist_cm",
-  hip: "hip_cm", chest: "chest_cm", arm: "arm_cm", shoulder: "shoulder_cm", thigh: "thigh_cm",
+  weight: "weight_kg", smm: "skeletal_muscle_kg", fat: "body_fat_kg", fatpct: "body_fat_pct",
+  vfl: "visceral_fat_level", whr: "whr", bmr: "bmr_kcal",
+  fatctl: "fat_control_kg", musclectl: "muscle_control_kg", note: "note",
 };
 function fromWire(w) {
-  const r = { id: w.record_date, date: w.record_date, sex: w.sex };
+  const r = { id: w.record_date, date: w.record_date };
   for (const [f, k] of Object.entries(FIELD2WIRE)) r[f] = w[k];
   return r;
 }
 function toWire(f) {
-  const w = { sex: f.sex || "m" };
+  const w = {};
   for (const [field, k] of Object.entries(FIELD2WIRE)) w[k] = f[field] ?? null;
   return w;
 }
 async function reloadRecords() {
-  db.records = (await api(`/body/records${Q()}`)).map(fromWire);
+  db.records = (await api(`/inbody/records${Q()}`)).map(fromWire);
 }
-const putRecord = (date, f) => api(`/body/records/${date}${Q()}`, {
+const putRecord = (date, f) => api(`/inbody/records/${date}${Q()}`, {
   method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toWire(f)),
 });
-const deleteRecordApi = (date) => api(`/body/records/${date}${Q()}`, { method: "DELETE" });
+const deleteRecordApi = (date) => api(`/inbody/records/${date}${Q()}`, { method: "DELETE" });
 
 /* 프로필 셀렉트: /profiles 로딩 → 현재 선택 표시 → 전환 시 재조회 */
 async function initProfileSwitcher(onSwitch) {
@@ -504,49 +496,43 @@ async function initProfileSwitcher(onSwitch) {
   } catch { sel.style.display = "none"; }
 }
 
-/* ───────────────────────── 계산 ─────────────────────────── */
-function bodyFat(sex, h, neck, waist, hip) {
-  const L = Math.log10;
-  let v;
-  if (sex === "f") {
-    if (!hip || waist + hip - neck <= 0) return null;
-    v = 495 / (1.29579 - 0.35004 * L(waist + hip - neck) + 0.22100 * L(h)) - 450;
-  } else {
-    if (waist - neck <= 0) return null;
-    v = 495 / (1.0324 - 0.19077 * L(waist - neck) + 0.15456 * L(h)) - 450;
-  }
-  return (v > 0 && v < 75) ? v : null;
-}
+/* ───────────────────────── 파생 계산 ────────────────────────
+   LBM = 체중 − 체지방량. 단백질 목표 = LBM × 2.0~2.2g (최소 1.8g).
+   유지 kcal = BMR × 1.4~1.5, 감량 = 유지 − 400~500. */
 function derive(r) {
-  const bf = bodyFat(r.sex, r.height, r.neck, r.waist, r.hip);
-  if (bf == null) return { bf: null, lean: null, ffmi: null };
-  const lean = r.weight * (1 - bf / 100);
-  const ffmi = lean / Math.pow(r.height / 100, 2);
-  return { bf, lean, ffmi };
+  const lean = (r.weight != null && r.fat != null) ? r.weight - r.fat : null;
+  const protMin  = lean != null ? lean * 2.0 : null;
+  const protMax  = lean != null ? lean * 2.2 : null;
+  const protFloor = lean != null ? lean * 1.8 : null;
+  const maintainLo = r.bmr != null ? r.bmr * 1.4 : null;
+  const maintainHi = r.bmr != null ? r.bmr * 1.5 : null;
+  return { lean, protMin, protMax, protFloor, maintainLo, maintainHi };
 }
-function bfCategory(bf, sex) {
-  const b = sex === "f"
-    ? [[14,"필수지방 근접"],[21,"운동선수"],[25,"피트니스"],[32,"평균"],[100,"관리 필요"]]
-    : [[6,"필수지방 근접"],[14,"운동선수"],[18,"피트니스"],[25,"평균"],[100,"관리 필요"]];
-  for (const [lim, name] of b) if (bf < lim) return name;
-  return "";
+function fatCategory(pct) {
+  // 남성 기준 구간 (인바디 표준)
+  if (pct == null) return "";
+  if (pct < 10) return "매우 낮음";
+  if (pct < 15) return "운동선수";
+  if (pct < 20) return "표준";
+  if (pct < 25) return "표준 상한";
+  return "관리 필요";
 }
 const fmt = (v, d = 1) => v == null ? "–" : v.toFixed(d);
 const sorted = () => [...db.records].sort((a, b) => a.date.localeCompare(b.date));
 
-/* 부위 정의: dir=+1 이면 증가가 좋은 신호, -1이면 감소가 좋은 신호 */
+/* 지표 정의: dir=+1 이면 증가가 좋은 신호, -1이면 감소가 좋은 신호 */
 const METRICS = [
-  { key: "bf",       label: "체지방률",  unit: "%",  dir: -1, derived: true },
-  { key: "waist",    label: "허리",      unit: "cm", dir: -1 },
-  { key: "lean",     label: "제지방량",  unit: "kg", dir: +1, derived: true },
-  { key: "arm",      label: "팔뚝",      unit: "cm", dir: +1 },
-  { key: "chest",    label: "가슴",      unit: "cm", dir: +1 },
-  { key: "shoulder", label: "어깨",      unit: "cm", dir: +1 },
-  { key: "thigh",    label: "허벅지",    unit: "cm", dir: +1 },
-  { key: "weight",   label: "체중",      unit: "kg", dir: 0  },
+  { key: "fatpct", label: "체지방률",   unit: "%",    dir: -1 },
+  { key: "smm",    label: "골격근량",   unit: "kg",   dir: +1 },
+  { key: "lean",   label: "제지방량",   unit: "kg",   dir: +1, derived: true },
+  { key: "fat",    label: "체지방량",   unit: "kg",   dir: -1 },
+  { key: "weight", label: "체중",       unit: "kg",   dir: 0  },
+  { key: "vfl",    label: "내장지방",   unit: "Lv",   dir: -1 },
+  { key: "whr",    label: "복부지방률", unit: "",     dir: -1 },
+  { key: "bmr",    label: "기초대사량", unit: "kcal", dir: +1 },
 ];
 function val(r, key) {
-  if (key === "bf" || key === "lean" || key === "ffmi") return derive(r)[key];
+  if (key === "lean") return derive(r).lean;
   return r[key] ?? null;
 }
 
@@ -555,29 +541,20 @@ function verdict() {
   const rs = sorted();
   if (rs.length < 2) return null;
   const base = rs[0], last = rs[rs.length - 1];
-  const dWaist = (last.waist != null && base.waist != null) ? last.waist - base.waist : null;
-  const limbKeys = ["arm", "chest", "thigh", "shoulder"];
-  const limbDeltas = limbKeys
-    .map(k => (last[k] != null && base[k] != null) ? last[k] - base[k] : null)
-    .filter(v => v != null);
-  const dLimb = limbDeltas.length ? limbDeltas.reduce((a, b) => a + b, 0) / limbDeltas.length : null;
+  const dFat = (last.fatpct != null && base.fatpct != null) ? last.fatpct - base.fatpct : null;
+  const dSmm = (last.smm != null && base.smm != null) ? last.smm - base.smm : null;
+  if (dFat == null || dSmm == null) return { cls: "warning", icon: "◔", title: "판정 불가", body: "체지방률·골격근량 기록이 부족합니다." };
 
-  if (dWaist == null) return { cls: "warning", icon: "◔", title: "판정 불가", body: "허리 둘레 기록이 부족합니다." };
+  const detail = `기준점 대비 체지방률 ${dFat >= 0 ? "+" : ""}${dFat.toFixed(1)}%p · 골격근량 ${dSmm >= 0 ? "+" : ""}${dSmm.toFixed(1)}kg (${base.date} → ${last.date})`;
+  const fDown = dFat <= -0.5, fUp = dFat >= 0.5;
+  const mKeep = dSmm >= -0.2, mUp = dSmm >= 0.3, mDown = dSmm <= -0.3;
 
-  const wDown = dWaist <= -0.5, wUp = dWaist >= 0.5, wFlat = !wDown && !wUp;
-  const lUp = dLimb != null && dLimb >= 0.3;
-  const lDown = dLimb != null && dLimb <= -0.3;
-  const detail = `기준점 대비 허리 ${dWaist >= 0 ? "+" : ""}${dWaist.toFixed(1)}cm` +
-    (dLimb != null ? ` · 사지 평균 ${dLimb >= 0 ? "+" : ""}${dLimb.toFixed(1)}cm` : "") +
-    ` (${base.date} → ${last.date})`;
-
-  if (wDown && lUp)  return { cls: "good",    icon: "▲", title: "교과서적 리컴포지션 진행 중", body: detail + " — 현재 방식 유지." };
-  if (wFlat && lUp)  return { cls: "good",    icon: "▲", title: "리컴포지션 정상 진행", body: detail + " — 허리 유지 + 근성장. 계속 진행." };
-  if (wDown && lDown) return { cls: "serious", icon: "▼", title: "근손실 신호", body: detail + " — 단백질 섭취량과 훈련 강도를 점검하세요." };
-  if (wDown)         return { cls: "good",    icon: "◆", title: "감량 우세", body: detail + " — 지방은 빠지는 중. 사지 둘레 유지 여부를 다음 측정에서 확인." };
-  if (wUp && lUp)    return { cls: "warning", icon: "◆", title: "벌크 방향", body: detail + " — 근육과 함께 허리도 증가. 증가 속도를 주시하세요." };
-  if (wUp)           return { cls: "serious", icon: "▼", title: "지방 증가 신호", body: detail + " — 사지는 그대로인데 허리만 증가. 섭취 칼로리 점검." };
-  return { cls: "warning", icon: "◔", title: "변화 미미 — 정체", body: detail + " — 4주 더 관찰 후 식단·볼륨 변수를 조정하세요." };
+  if (fDown && mUp)   return { cls: "good",    icon: "▲", title: "리컴포지션 진행 중 — 최상 시나리오", body: detail + " — 지방↓ + 근육↑. 현재 조합(단백질 목표 + 온건한 적자 + 근력운동) 유지." };
+  if (fDown && mKeep) return { cls: "good",    icon: "▲", title: "정확히 궤도", body: detail + " — 골격근 유지하며 체지방률 하락. 계획대로 진행." };
+  if (fDown && mDown) return { cls: "serious", icon: "▼", title: "근손실 동반 감량", body: detail + " — 적자가 과하거나 단백질 부족. 섭취량과 훈련 강도를 점검하세요." };
+  if (fUp && mUp)     return { cls: "warning", icon: "◆", title: "벌크 방향", body: detail + " — 근육과 함께 지방도 증가. 감량 목표라면 칼로리 점검." };
+  if (fUp)            return { cls: "serious", icon: "▼", title: "체지방 증가", body: detail + " — 섭취 칼로리를 점검하세요." };
+  return { cls: "warning", icon: "◔", title: "변화 미미 — 정체", body: detail + " — 3개월 주기로 보되, 정체가 이어지면 식단·볼륨 변수를 조정하세요." };
 }
 
 /* ───────────────────────── 렌더 ─────────────────────────── */
@@ -604,27 +581,41 @@ function renderTiles() {
   document.getElementById("latest-date").textContent = `· 최근 측정 ${last.date}`;
 
   const dLast = derive(last), dBase = derive(base);
+  const many = rs.length > 1;
   const tiles = [];
 
-  tiles.push(tileHTML("체지방률 (NAVY)", fmt(dLast.bf), "%",
-    dLast.bf != null ? `${bfCategory(dLast.bf, last.sex)} · 실제는 2~3%p 높을 수 있음` : "목·허리 기록 필요",
-    (dLast.bf != null && dBase.bf != null && rs.length > 1) ? deltaSpan(dLast.bf - dBase.bf, -1, "%p") : ""));
+  tiles.push(tileHTML("체지방률", fmt(last.fatpct), "%",
+    fatCategory(last.fatpct),
+    (many && last.fatpct != null && base.fatpct != null) ? deltaSpan(last.fatpct - base.fatpct, -1, "%p") : ""));
 
-  tiles.push(tileHTML("제지방량", fmt(dLast.lean), "kg",
-    "체중 × (1 − 체지방률)",
-    (dLast.lean != null && dBase.lean != null && rs.length > 1) ? deltaSpan(dLast.lean - dBase.lean, +1, "kg") : ""));
+  tiles.push(tileHTML("골격근량", fmt(last.smm), "kg",
+    last.musclectl != null ? `근육조절 ${last.musclectl > 0 ? "+" : ""}${last.musclectl.toFixed(1)}kg 권고` : "",
+    (many && last.smm != null && base.smm != null) ? deltaSpan(last.smm - base.smm, +1, "kg") : ""));
 
-  const ffmiPct = dLast.ffmi != null ? Math.min(100, dLast.ffmi / 22 * 100) : 0;
-  tiles.push(tileHTML("FFMI", fmt(dLast.ffmi, 1), "", `목표 22 대비 ${ffmiPct.toFixed(0)}%`,
-    "", `<div class="bar"><div style="width:${ffmiPct}%"></div></div>`));
+  tiles.push(tileHTML("제지방량 (LBM)", fmt(dLast.lean), "kg",
+    "체중 − 체지방량",
+    (many && dLast.lean != null && dBase.lean != null) ? deltaSpan(dLast.lean - dBase.lean, +1, "kg") : ""));
 
-  tiles.push(tileHTML("허리", fmt(last.waist), "cm",
-    rs.length > 1 ? "기준점 대비" : "Day 0 기준점",
-    rs.length > 1 ? deltaSpan(last.waist - base.waist, -1, "cm") : ""));
+  tiles.push(tileHTML("단백질 목표",
+    dLast.protMin != null ? `${Math.round(dLast.protMin)}~${Math.round(dLast.protMax)}` : "–", "g/일",
+    dLast.protFloor != null ? `최소 방어선 ${Math.round(dLast.protFloor)}g · LBM × 2.0~2.2` : ""));
+
+  if (last.vfl != null) {
+    const over = last.vfl > 10;
+    tiles.push(tileHTML("내장지방", String(last.vfl), "Lv",
+      over ? "기준(10) 초과 — 감량 우선" : "기준(10) 이하",
+      (many && base.vfl != null) ? deltaSpan(last.vfl - base.vfl, -1, "Lv", 0) : "",
+      `<div class="bar"><div style="width:${Math.min(100, last.vfl / 20 * 100)}%;background:${over ? "var(--serious)" : "var(--series-1)"}"></div></div>`));
+  }
+
+  if (dLast.maintainLo != null) {
+    tiles.push(tileHTML("감량 섭취", `${Math.round((dLast.maintainLo - 500) / 10) * 10}~${Math.round((dLast.maintainHi - 400) / 10) * 10}`, "kcal",
+      `유지 ${Math.round(dLast.maintainLo)}~${Math.round(dLast.maintainHi)} − 적자 400~500`));
+  }
 
   box.innerHTML = tiles.join("");
 }
-function tileHTML(label, value, unit, sub, delta, extra = "") {
+function tileHTML(label, value, unit, sub, delta = "", extra = "") {
   return `<div class="tile">
     <div class="label">${label}</div>
     <div class="value">${value}<span class="unit">${unit}</span></div>
@@ -649,7 +640,7 @@ function renderTable() {
     return;
   }
   tb.innerHTML = rs.map((r, i) => {
-    const d = derive(r), prev = i > 0 ? rs[i - 1] : null;
+    const prev = i > 0 ? rs[i - 1] : null;
     const cell = (key, dir, digits = 1, unit = "") => {
       const v = val(r, key);
       if (v == null) return "<td>–</td>";
@@ -660,11 +651,12 @@ function renderTable() {
       }
       return `<td>${v.toFixed(digits)}${unit}${dl}</td>`;
     };
-    return `<tr data-id="${r.id}" class="${r.id === editingId ? "editing" : ""}" title="클릭하여 수정">
+    const ctl = (v) => v == null ? "<td>–</td>" : `<td>${v > 0 ? "+" : ""}${v.toFixed(1)}</td>`;
+    return `<tr data-id="${r.id}" class="${r.id === editingId ? "editing" : ""}" title="${r.note ? r.note.replace(/"/g, "&quot;") + " · " : ""}클릭하여 수정">
       <td>${r.date}${i === 0 ? '<span class="day0-badge">DAY 0</span>' : ""}</td>
-      ${cell("weight", 0)}${cell("bf", -1, 1, "%")}${cell("lean", +1)}
-      <td>${d.ffmi != null ? d.ffmi.toFixed(1) : "–"}</td>
-      ${cell("neck", 0)}${cell("waist", -1)}${cell("chest", +1)}${cell("arm", +1)}${cell("shoulder", +1)}${cell("thigh", +1)}
+      ${cell("weight", 0)}${cell("smm", +1)}${cell("fat", -1)}${cell("fatpct", -1, 1, "%")}${cell("lean", +1)}
+      ${cell("vfl", -1, 0)}${cell("whr", -1, 2)}${cell("bmr", +1, 0)}
+      ${ctl(r.fatctl)}${ctl(r.musclectl)}
       <td><button class="del" data-id="${r.id}" title="삭제">✕</button></td>
     </tr>`;
   }).join("");
@@ -770,16 +762,17 @@ function chartCard(metric, rs) {
 /* ───────────────────────── 입력 ─────────────────────────── */
 const $ = id => document.getElementById(id);
 let editingId = null;
+const NUM_INPUT_IDS = ["in-weight","in-smm","in-fat","in-fatpct","in-vfl","in-whr","in-bmr","in-fatctl","in-musclectl"];
 
 function startEdit(r) {
   editingId = r.id;
   const set = (id, v) => $(id).value = v ?? "";
   $("in-date").value = r.date;
-  $("in-sex").value = r.sex || "m";
-  set("in-weight", r.weight); set("in-height", r.height);
-  set("in-neck", r.neck); set("in-waist", r.waist); set("in-hip", r.hip);
-  set("in-chest", r.chest); set("in-arm", r.arm);
-  set("in-shoulder", r.shoulder); set("in-thigh", r.thigh);
+  set("in-weight", r.weight); set("in-smm", r.smm);
+  set("in-fat", r.fat); set("in-fatpct", r.fatpct);
+  set("in-vfl", r.vfl); set("in-whr", r.whr); set("in-bmr", r.bmr);
+  set("in-fatctl", r.fatctl); set("in-musclectl", r.musclectl);
+  set("in-note", r.note);
   $("btn-save").textContent = "수정 저장";
   $("btn-cancel-edit").style.display = "";
   const badge = $("edit-badge");
@@ -796,49 +789,49 @@ function cancelEdit() {
   $("btn-cancel-edit").style.display = "none";
   $("edit-badge").style.display = "none";
   $("entry").classList.remove("editing");
-  ["in-neck","in-waist","in-hip","in-chest","in-arm","in-shoulder","in-thigh","in-weight"].forEach(id => $(id).value = "");
+  NUM_INPUT_IDS.forEach(id => $(id).value = "");
+  $("in-note").value = "";
   const t = new Date();
   $("in-date").value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`;
   updatePreview();
   renderTable();
 }
-const inputs = ["date", "weight", "height", "neck", "waist", "hip", "chest", "arm", "shoulder", "thigh"].map(k => $("in-" + k));
 
 function readForm() {
   const n = id => { const v = parseFloat($(id).value); return isNaN(v) ? null : v; };
+  const int = id => { const v = parseInt($(id).value, 10); return isNaN(v) ? null : v; };
+  const note = $("in-note").value.trim();
   return {
-    date: $("in-date").value, sex: $("in-sex").value,
-    weight: n("in-weight"), height: n("in-height"),
-    neck: n("in-neck"), waist: n("in-waist"), hip: n("in-hip"),
-    chest: n("in-chest"), arm: n("in-arm"), shoulder: n("in-shoulder"), thigh: n("in-thigh"),
+    date: $("in-date").value,
+    weight: n("in-weight"), smm: n("in-smm"),
+    fat: n("in-fat"), fatpct: n("in-fatpct"),
+    vfl: int("in-vfl"), whr: n("in-whr"), bmr: int("in-bmr"),
+    fatctl: n("in-fatctl"), musclectl: n("in-musclectl"),
+    note: note || null,
   };
 }
 function updatePreview() {
   const f = readForm();
   const el = $("live-preview");
-  $("hip-field").style.display = f.sex === "f" ? "" : "none";
-  if (f.height && f.neck && f.waist && (f.sex === "m" || f.hip)) {
-    const bf = bodyFat(f.sex, f.height, f.neck, f.waist, f.hip);
-    if (bf != null) {
-      let extra = "";
-      if (f.weight) {
-        const lean = f.weight * (1 - bf / 100);
-        extra = ` · 제지방 ${lean.toFixed(1)}kg · FFMI ${(lean / Math.pow(f.height / 100, 2)).toFixed(1)}`;
-      }
-      el.innerHTML = `체지방률 <strong>${bf.toFixed(1)}%</strong> (${bfCategory(bf, f.sex)})${extra}`;
-      return;
+  if (f.weight != null && f.fat != null && f.fat < f.weight) {
+    const d = derive(f);
+    let kcal = "";
+    if (d.maintainLo != null) {
+      kcal = ` · 유지 ≈${Math.round(d.maintainLo)}~${Math.round(d.maintainHi)}kcal · 감량 ${Math.round(d.maintainLo - 500)}~${Math.round(d.maintainHi - 400)}kcal`;
     }
+    el.innerHTML = `제지방 <strong>${d.lean.toFixed(1)}kg</strong> · 단백질 <strong>${Math.round(d.protMin)}~${Math.round(d.protMax)}g</strong>/일 (최소 ${Math.round(d.protFloor)}g)${kcal}`;
+    return;
   }
-  el.textContent = "필수값(*)을 입력하면 체지방률이 미리 계산됩니다";
+  el.textContent = "필수값(*)을 입력하면 제지방량·단백질 목표가 계산됩니다";
 }
-inputs.forEach(i => i && i.addEventListener("input", updatePreview));
-$("in-sex").addEventListener("change", updatePreview);
+NUM_INPUT_IDS.forEach(id => $(id).addEventListener("input", updatePreview));
 
 $("btn-save").addEventListener("click", async () => {
   const f = readForm();
   if (!f.date) return alert("날짜를 입력하세요.");
-  if (!f.weight || !f.height || !f.neck || !f.waist) return alert("체중·키·목·허리는 필수입니다.");
-  if (f.sex === "f" && !f.hip) return alert("여성 공식에는 엉덩이 둘레가 필요합니다.");
+  if (f.weight == null || f.smm == null || f.fat == null || f.fatpct == null)
+    return alert("체중·골격근량·체지방량·체지방률은 필수입니다.");
+  if (f.fat >= f.weight) return alert("체지방량이 체중보다 클 수 없습니다.");
   // 편집 중인 기록 자신은 중복으로 치지 않음 (id = 날짜)
   const existing = db.records.find(r => r.date === f.date && r.id !== editingId);
   if (existing && !confirm(`${f.date} 기록이 이미 있습니다. 덮어쓸까요?`)) return;
@@ -848,20 +841,14 @@ $("btn-save").addEventListener("click", async () => {
     if (editingId && editingId !== f.date) await deleteRecordApi(editingId);
     await reloadRecords();
   } catch (err) { alert("저장 실패: " + err.message); return; }
-  prefs.lastHeight = f.height; prefs.lastSex = f.sex; savePrefs();
   if (editingId) {
     cancelEdit();
   } else {
-    ["in-neck","in-waist","in-hip","in-chest","in-arm","in-shoulder","in-thigh","in-weight"].forEach(id => $(id).value = "");
+    NUM_INPUT_IDS.forEach(id => $(id).value = "");
+    $("in-note").value = "";
     updatePreview();
   }
   renderAll();
-  // 측정 간격 경고
-  const rs = sorted();
-  if (rs.length >= 2) {
-    const gap = (new Date(rs[rs.length-1].date) - new Date(rs[rs.length-2].date)) / 86400000;
-    if (gap > 0 && gap < 21) setTimeout(() => alert(`직전 기록과 ${Math.round(gap)}일 간격입니다.\n둘레 변화는 월 단위로 봐야 노이즈와 신호가 구분됩니다 — 판정은 참고만 하세요.`), 100);
-  }
 });
 
 /* 내보내기 / 가져오기 */
@@ -869,7 +856,7 @@ $("btn-export").addEventListener("click", () => {
   const blob = new Blob([JSON.stringify(db, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `bodylog-${new Date().toISOString().slice(0,10)}.json`;
+  a.download = `inbodylog-${new Date().toISOString().slice(0,10)}.json`;
   a.click(); URL.revokeObjectURL(a.href);
 });
 $("btn-cancel-edit").addEventListener("click", cancelEdit);
@@ -882,7 +869,8 @@ $("file-import").addEventListener("change", e => {
     try {
       const data = JSON.parse(reader.result);
       if (!Array.isArray(data.records)) throw 0;
-      records = data.records.filter(r => r.date && r.weight && r.height && r.neck && r.waist);
+      records = data.records.filter(r =>
+        r.date && r.weight != null && r.smm != null && r.fat != null && r.fatpct != null);
     } catch { alert("올바른 백업 파일이 아닙니다."); return; }
     if (!records.length) return alert("가져올 수 있는 기록이 없습니다.");
     if (!confirm(`${records.length}건을 서버 DB에 저장합니다. 같은 날짜는 덮어씁니다. 진행할까요?`)) return;
@@ -901,34 +889,9 @@ $("file-import").addEventListener("change", e => {
 /* ───────────────────────── 초기화 ───────────────────────── */
 function renderAll() { renderTiles(); renderVerdict(); renderCharts(); renderTable(); }
 
-/* 구버전(localStorage) 기록 → 서버 DB 1회 마이그레이션 */
-async function migrateLegacy() {
-  let legacy = null;
-  try { legacy = JSON.parse(localStorage.getItem(LEGACY_KEY)); } catch {}
-  if (!legacy || !Array.isArray(legacy.records) || !legacy.records.length) return;
-  if (prefs.lastHeight == null && legacy.lastHeight != null) { prefs.lastHeight = legacy.lastHeight; prefs.lastSex = legacy.lastSex; savePrefs(); }
-  if (prefs.migrationDeclined) return;
-  const candidates = legacy.records.filter(r =>
-    r.date && r.weight && r.height && r.neck && r.waist &&
-    !db.records.some(s => s.date === r.date));
-  if (!candidates.length) return;
-  if (!confirm(`이 브라우저에 저장돼 있던 기존 기록 ${candidates.length}건을 서버 DB로 옮길까요?`)) {
-    prefs.migrationDeclined = true; savePrefs(); return;
-  }
-  for (const r of candidates) { try { await putRecord(r.date, r); } catch {} }
-  // 원본은 .bak으로 이동해 재실행 방지 (백업은 유지)
-  try {
-    localStorage.setItem(LEGACY_KEY + ".bak", JSON.stringify(legacy));
-    localStorage.removeItem(LEGACY_KEY);
-  } catch {}
-  await reloadRecords();
-}
-
 (async function init() {
   const today = new Date();
   $("in-date").value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
-  $("in-height").value = prefs.lastHeight ?? 187;
-  $("in-sex").value = prefs.lastSex ?? "m";
   updatePreview();
   try {
     await initProfileSwitcher(async () => {
@@ -937,7 +900,6 @@ async function migrateLegacy() {
       renderAll();
     });
     await reloadRecords();
-    await migrateLegacy();
   } catch (err) {
     const box = document.getElementById("verdict-box");
     box.style.display = "flex";

@@ -40,6 +40,9 @@ ydocter 는 두 개의 DB 백엔드를 동시에 사용한다. 어떤 데이터�
 | `nutrition_logs` | table | 40 | 사용자 식사 기록. `profile_id × log_date × meal_type × food_name`. |
 | `nutrition_values` | table | 646 | 각 로그가 함유한 영양소 양. `log_id × nutrient_id` 유니크. |
 | `profile_nutrient_rda` | table | 72 | 프로필별 RDA/UL 오버라이드 (성별·체격에서 derive). NULL = 카탈로그 기본값. |
+| `body_records` | table | — | 둘레 측정 기록 (`sql/schema-body.sql`). `profile_id × record_date` 유니크. |
+| `workout_sessions` / `workout_sets` | table | — | 운동 세션 + 세트 (`sql/schema-body.sql`). |
+| `inbody_records` | table | — | 인바디 결과지 옮겨적기 (`sql/schema-body.sql`). 체중·골격근량·체지방량·체지방률(필수) + 내장지방Lv·WHR·BMR·지방/근육조절·메모. LBM·단백질 목표·칼로리는 클라이언트 파생, 미저장. |
 
 > **`profiles` 가 양쪽에 있는 이유**: Turso 의 `nutrition_logs` / `profile_nutrient_rda` 가
 > FK 로 `profiles(id)` 를 참조하므로 Turso 에도 같은 row 가 필요하다. 로컬에서 INSERT
@@ -66,6 +69,9 @@ ydocter 는 두 개의 DB 백엔드를 동시에 사용한다. 어떤 데이터�
 | `GET /nutrition/{date}` | profiles (slug→id) | nutrition_logs, nutrition_values, nutrients, profile_nutrient_rda |
 | `POST /nutrition/{date}/parse` | profiles (slug→id) | nutrients (read), nutrition_logs / nutrition_values (write, 사이에 Claude 호출이 있어 read/write 사이에 conn 재오픈) |
 | `GET /nutrients` | — | nutrients |
+| `GET/PUT/DELETE /body/records*` | profiles (slug→id) | body_records |
+| `GET/PUT/DELETE /workout/sessions*` | profiles (slug→id) | workout_sessions, workout_sets |
+| `GET/PUT/DELETE /inbody/records*` | profiles (slug→id) | inbody_records |
 
 > **연결 분리 규칙**: 한 endpoint 안에서 두 DB 를 모두 써야 하면 각각 별도 `with`
 > 블록으로 처리한다. Turso 는 idle stream 을 끊으므로 같은 연결을 외부 호출(Claude 등) 전후로 유지하면 안 된다 (`app/main.py:472-475` 참고).
@@ -86,6 +92,7 @@ ydocter 는 두 개의 DB 백엔드를 동시에 사용한다. 어떤 데이터�
 |---|---|
 | `sql/schema-health.sql` | Local 에 적용. profiles + test_items + measurements + `v_measurements` view. |
 | `sql/schema-nutrition.sql` | Turso (or dev-fallback local) 에 적용. nutrients + nutrition_* + `profiles` FK 타겟. |
+| `sql/schema-body.sql` | Turso (or dev-fallback local) 에 적용. body_records + workout_sessions/sets + inbody_records + `profiles` FK 타겟. |
 | `sql/turso-cleanup.sql` | 일회성. 분리 이전에 Turso 에 만들어졌던 잔재 (`test_items`, `measurements`, `v_measurements`, `v_daily_nutrition`) 를 idempotent 하게 DROP. |
 
 ## CLI

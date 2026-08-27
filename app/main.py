@@ -33,6 +33,8 @@ from app.models import (
     BodyRecord,
     BodyRecordIn,
     DailyNutrition,
+    InbodyRecord,
+    InbodyRecordIn,
     Measurement,
     NutrientTotal,
     NutritionDateSummary,
@@ -664,6 +666,79 @@ def body_record_delete(
 
 
 # ===========================================================================
+# InBody records (/inbody page)
+# ===========================================================================
+
+_INBODY_COLS = (
+    "weight_kg", "skeletal_muscle_kg", "body_fat_kg", "body_fat_pct",
+    "visceral_fat_level", "whr", "bmr_kcal",
+    "fat_control_kg", "muscle_control_kg", "note",
+)
+
+
+@app.get("/inbody/records", response_model=List[InbodyRecord])
+def inbody_records(profile: Optional[str] = Query(None)) -> List[InbodyRecord]:
+    """All InBody measurements for a profile, oldest first."""
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT record_date, {", ".join(_INBODY_COLS)}
+            FROM inbody_records
+            WHERE profile_id = ?
+            ORDER BY record_date
+            """,
+            (pid,),
+        ).fetchall()
+    return [InbodyRecord(**dict(r)) for r in rows]
+
+
+@app.put("/inbody/records/{record_date}", response_model=InbodyRecord)
+def inbody_record_upsert(
+    record_date: str,
+    body: InbodyRecordIn,
+    profile: Optional[str] = Query(None),
+) -> InbodyRecord:
+    """Insert or replace the record for one date (date = natural key)."""
+    if not _DATE_RE.match(record_date):
+        raise HTTPException(422, "record_date must be ISO YYYY-MM-DD")
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
+    values = [getattr(body, c) for c in _INBODY_COLS]
+    with get_conn() as conn:
+        conn.execute(
+            f"""
+            INSERT INTO inbody_records (profile_id, record_date, {", ".join(_INBODY_COLS)})
+            VALUES ({", ".join("?" * (2 + len(_INBODY_COLS)))})
+            ON CONFLICT (profile_id, record_date) DO UPDATE SET
+                {", ".join(f"{c} = excluded.{c}" for c in _INBODY_COLS)}
+            """,
+            tuple([pid, record_date, *values]),
+        )
+        conn.commit()
+    return InbodyRecord(record_date=record_date, **body.model_dump())
+
+
+@app.delete("/inbody/records/{record_date}")
+def inbody_record_delete(
+    record_date: str,
+    profile: Optional[str] = Query(None),
+) -> dict:
+    if not _DATE_RE.match(record_date):
+        raise HTTPException(422, "record_date must be ISO YYYY-MM-DD")
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
+    with get_conn() as conn:
+        conn.execute(
+            "DELETE FROM inbody_records WHERE profile_id = ? AND record_date = ?",
+            (pid, record_date),
+        )
+        conn.commit()
+    return {"ok": True, "record_date": record_date}
+
+
+# ===========================================================================
 # Workout sessions (machine program tracker, /workout page)
 # ===========================================================================
 
@@ -914,3 +989,8 @@ def body_page() -> HTMLResponse:
 @app.get("/workout", include_in_schema=False)
 def workout_page() -> HTMLResponse:
     return _render_html("workout.html")
+
+
+@app.get("/inbody", include_in_schema=False)
+def inbody_page() -> HTMLResponse:
+    return _render_html("inbody.html")

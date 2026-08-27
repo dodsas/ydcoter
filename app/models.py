@@ -179,6 +179,49 @@ class BodyRecord(BodyRecordIn):
     record_date: str
 
 
+class InbodyRecordIn(BaseModel):
+    """Upsert payload for one InBody measurement (transcribed from the sheet).
+
+    제지방량(LBM) / 단백질 목표 / 유지·감량 칼로리는 클라이언트에서 파생
+    계산하며 저장하지 않는다 (body_records와 같은 정책).
+    """
+
+    weight_kg: float
+    skeletal_muscle_kg: float
+    body_fat_kg: float
+    body_fat_pct: float
+    visceral_fat_level: Optional[int] = None
+    whr: Optional[float] = None
+    bmr_kcal: Optional[int] = None
+    fat_control_kg: Optional[float] = None
+    muscle_control_kg: Optional[float] = None
+    note: Optional[str] = None
+
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _check(self):
+        if self.weight_kg <= 0:
+            raise ValueError("weight_kg must be > 0")
+        if self.skeletal_muscle_kg <= 0:
+            raise ValueError("skeletal_muscle_kg must be > 0")
+        if not 0 <= self.body_fat_kg < self.weight_kg:
+            raise ValueError("body_fat_kg must be 0 ≤ x < weight_kg")
+        if not 0 <= self.body_fat_pct < 70:
+            raise ValueError("body_fat_pct must be 0..70")
+        if self.visceral_fat_level is not None and not 1 <= self.visceral_fat_level <= 30:
+            raise ValueError("visceral_fat_level must be 1..30")
+        if self.whr is not None and not 0.3 <= self.whr <= 1.5:
+            raise ValueError("whr must be 0.3..1.5")
+        if self.bmr_kcal is not None and not 500 <= self.bmr_kcal <= 4000:
+            raise ValueError("bmr_kcal must be 500..4000")
+        return self
+
+
+class InbodyRecord(InbodyRecordIn):
+    record_date: str
+
+
 class WorkoutSet(BaseModel):
     """One set of one exercise within a session."""
 
