@@ -307,3 +307,14 @@ class WorkoutSessionIn(BaseModel):
 
 class WorkoutSession(WorkoutSessionIn):
     session_date: str
+
+
+class HealthRecords(BaseModel):
+    """최근 N일치 건강 레코드 묶음 — 대시보드 요약용 (GET /dashboard/health-records)."""
+
+    since: str  # 조회 시작일 (ISO YYYY-MM-DD, inclusive)
+    days: int
+    weight: List[WeightRecord]
+    body: List[BodyRecord]
+    inbody: List[InbodyRecord]
+    workout: List[WorkoutSession]

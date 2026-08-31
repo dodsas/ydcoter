@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -33,6 +33,7 @@ from app.models import (
     BodyRecord,
     BodyRecordIn,
     DailyNutrition,
+    HealthRecords,
     InbodyRecord,
     InbodyRecordCreate,
     InbodyRecordIn,
@@ -936,6 +937,97 @@ def workout_session_delete(
             conn.execute("DELETE FROM workout_sessions WHERE id = ?", (row["id"],))
             conn.commit()
     return {"ok": True, "session_date": session_date}
+
+
+# ===========================================================================
+# Dashboard — aggregated recent health records
+# ===========================================================================
+
+
+@app.get("/dashboard/health-records", response_model=HealthRecords)
+def dashboard_health_records(
+    days: int = Query(30, ge=1, le=365, description="최근 N일치 조회"),
+    profile: Optional[str] = Query(None),
+) -> HealthRecords:
+    """최근 N일치 체중/신체둘레/인바디/운동 기록을 한 번에 반환 (최신순)."""
+    since = (date.today() - timedelta(days=days)).isoformat()
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
+    with get_conn() as conn:
+        wrows = conn.execute(
+            """
+            SELECT record_date, weight_kg, note
+            FROM weight_records
+            WHERE profile_id = ? AND record_date >= ?
+            ORDER BY record_date DESC
+            """,
+            (pid, since),
+        ).fetchall()
+        brows = conn.execute(
+            f"""
+            SELECT record_date, {", ".join(_BODY_COLS)}
+            FROM body_records
+            WHERE profile_id = ? AND record_date >= ?
+            ORDER BY record_date DESC
+            """,
+            (pid, since),
+        ).fetchall()
+        irows = conn.execute(
+            f"""
+            SELECT record_date, {", ".join(_INBODY_COLS)}
+            FROM inbody_records
+            WHERE profile_id = ? AND record_date >= ?
+            ORDER BY record_date DESC
+            """,
+            (pid, since),
+        ).fetchall()
+        srows = conn.execute(
+            """
+            SELECT id, session_date, phase, discomfort, note
+            FROM workout_sessions
+            WHERE profile_id = ? AND session_date >= ?
+            ORDER BY session_date DESC
+            """,
+            (pid, since),
+        ).fetchall()
+        sets_by_session: dict[int, list[WorkoutSet]] = {}
+        if srows:
+            trows = conn.execute(
+                """
+                SELECT t.session_id, t.exercise, t.set_no, t.weight_kg, t.reps
+                FROM workout_sets t
+                JOIN workout_sessions s ON s.id = t.session_id
+                WHERE s.profile_id = ? AND s.session_date >= ?
+                ORDER BY t.session_id, t.id
+                """,
+                (pid, since),
+            ).fetchall()
+            for t in trows:
+                sets_by_session.setdefault(t["session_id"], []).append(
+                    WorkoutSet(
+                        exercise=t["exercise"],
+                        set_no=t["set_no"],
+                        weight_kg=t["weight_kg"],
+                        reps=t["reps"],
+                    )
+                )
+    return HealthRecords(
+        since=since,
+        days=days,
+        weight=[WeightRecord(**dict(r)) for r in wrows],
+        body=[BodyRecord(**dict(r)) for r in brows],
+        inbody=[InbodyRecord(**dict(r)) for r in irows],
+        workout=[
+            WorkoutSession(
+                session_date=s["session_date"],
+                phase=s["phase"],
+                discomfort=s["discomfort"],
+                note=s["note"],
+                sets=sets_by_session.get(s["id"], []),
+            )
+            for s in srows
+        ],
+    )
 
 
 # ===========================================================================
