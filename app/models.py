@@ -309,12 +309,28 @@ class WorkoutSession(WorkoutSessionIn):
     session_date: str
 
 
-class HealthRecords(BaseModel):
-    """최근 N일치 건강 레코드 묶음 — 대시보드 요약용 (GET /dashboard/health-records)."""
+class HealthRecordItem(BaseModel):
+    """검진 지표 한 건 — 이름/단위/참고치를 포함한 자기완결형 행.
 
-    since: str  # 조회 시작일 (ISO YYYY-MM-DD, inclusive)
-    days: int
-    weight: List[WeightRecord]
-    body: List[BodyRecord]
-    inbody: List[InbodyRecord]
-    workout: List[WorkoutSession]
+    /measurements 와 달리 클라이언트가 /items 를 따로 조인하지 않아도
+    되도록 항목 메타데이터를 함께 내려준다.
+    """
+
+    year: int
+    major_category: str
+    minor_category: str
+    code: Optional[str] = None
+    name: str
+    unit: Optional[str] = None
+    value_numeric: Optional[float] = None
+    value_text: Optional[str] = None
+    ref_min: Optional[float] = None
+    ref_max: Optional[float] = None
+    status: Optional[str] = None  # NORMAL | LOW | HIGH | None
+
+
+class HealthRecords(BaseModel):
+    """최근 N개 검진 연도의 건강검진 지표 — 대시보드용 (GET /dashboard/health-records)."""
+
+    years: List[int]  # 포함된 검진 연도, 최신순
+    records: List[HealthRecordItem]  # 최신 연도부터, 분류/이름순

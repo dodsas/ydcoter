@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -33,6 +33,7 @@ from app.models import (
     BodyRecord,
     BodyRecordIn,
     DailyNutrition,
+    HealthRecordItem,
     HealthRecords,
     InbodyRecord,
     InbodyRecordCreate,
@@ -946,87 +947,43 @@ def workout_session_delete(
 
 @app.get("/dashboard/health-records", response_model=HealthRecords)
 def dashboard_health_records(
-    days: int = Query(30, ge=1, le=365, description="최근 N일치 조회"),
+    years: int = Query(1, ge=1, le=30, description="최근 N개 검진 연도"),
     profile: Optional[str] = Query(None),
 ) -> HealthRecords:
-    """최근 N일치 체중/신체둘레/인바디/운동 기록을 한 번에 반환 (최신순)."""
-    since = (date.today() - timedelta(days=days)).isoformat()
-    with get_local_conn() as lconn:
-        pid = _resolve_profile_id(lconn, profile)
-    with get_conn() as conn:
-        wrows = conn.execute(
+    """최근 N개 검진 연도의 건강검진 지표(혈당 등 measurements)를 반환.
+
+    검진은 매년 있지 않을 수 있으므로 달력 기준이 아니라 '기록이 있는
+    연도' 기준으로 최신 N개 연도를 고른다.
+    """
+    with get_local_conn() as conn:
+        pid = _resolve_profile_id(conn, profile)
+        yrows = conn.execute(
             """
-            SELECT record_date, weight_kg, note
-            FROM weight_records
-            WHERE profile_id = ? AND record_date >= ?
-            ORDER BY record_date DESC
+            SELECT DISTINCT year FROM v_measurements
+            WHERE profile_id = ?
+            ORDER BY year DESC
+            LIMIT ?
             """,
-            (pid, since),
+            (pid, years),
         ).fetchall()
-        brows = conn.execute(
+        year_list = [r["year"] for r in yrows]
+        if not year_list:
+            return HealthRecords(years=[], records=[])
+        rows = conn.execute(
             f"""
-            SELECT record_date, {", ".join(_BODY_COLS)}
-            FROM body_records
-            WHERE profile_id = ? AND record_date >= ?
-            ORDER BY record_date DESC
+            SELECT v.year, v.major_category, v.minor_category, v.code, v.name,
+                   i.unit, v.value_numeric, v.value_text, v.ref_min, v.ref_max,
+                   v.status
+            FROM v_measurements v
+            JOIN test_items i ON i.id = v.item_id
+            WHERE v.profile_id = ? AND v.year IN ({", ".join("?" * len(year_list))})
+            ORDER BY v.year DESC, v.major_category, v.minor_category, v.name
             """,
-            (pid, since),
+            (pid, *year_list),
         ).fetchall()
-        irows = conn.execute(
-            f"""
-            SELECT record_date, {", ".join(_INBODY_COLS)}
-            FROM inbody_records
-            WHERE profile_id = ? AND record_date >= ?
-            ORDER BY record_date DESC
-            """,
-            (pid, since),
-        ).fetchall()
-        srows = conn.execute(
-            """
-            SELECT id, session_date, phase, discomfort, note
-            FROM workout_sessions
-            WHERE profile_id = ? AND session_date >= ?
-            ORDER BY session_date DESC
-            """,
-            (pid, since),
-        ).fetchall()
-        sets_by_session: dict[int, list[WorkoutSet]] = {}
-        if srows:
-            trows = conn.execute(
-                """
-                SELECT t.session_id, t.exercise, t.set_no, t.weight_kg, t.reps
-                FROM workout_sets t
-                JOIN workout_sessions s ON s.id = t.session_id
-                WHERE s.profile_id = ? AND s.session_date >= ?
-                ORDER BY t.session_id, t.id
-                """,
-                (pid, since),
-            ).fetchall()
-            for t in trows:
-                sets_by_session.setdefault(t["session_id"], []).append(
-                    WorkoutSet(
-                        exercise=t["exercise"],
-                        set_no=t["set_no"],
-                        weight_kg=t["weight_kg"],
-                        reps=t["reps"],
-                    )
-                )
     return HealthRecords(
-        since=since,
-        days=days,
-        weight=[WeightRecord(**dict(r)) for r in wrows],
-        body=[BodyRecord(**dict(r)) for r in brows],
-        inbody=[InbodyRecord(**dict(r)) for r in irows],
-        workout=[
-            WorkoutSession(
-                session_date=s["session_date"],
-                phase=s["phase"],
-                discomfort=s["discomfort"],
-                note=s["note"],
-                sets=sets_by_session.get(s["id"], []),
-            )
-            for s in srows
-        ],
+        years=year_list,
+        records=[HealthRecordItem(**dict(r)) for r in rows],
     )
 
 
