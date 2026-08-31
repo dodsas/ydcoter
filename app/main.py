@@ -112,6 +112,9 @@ def _ensure_schema() -> None:
 def _resolve_profile(conn, slug: Optional[str]) -> tuple[int, str]:
     """Return ``(id, slug)`` for the given slug, or fall back to the first profile.
 
+    ``slug`` also matches the profile's display_name ('떠니' → tteoni) so
+    hand-typed URLs work with the Korean name.
+
     Returning both fields lets callers skip a follow-up ``SELECT slug ...``
     round-trip when they need the slug for the response payload.
 
@@ -120,7 +123,8 @@ def _resolve_profile(conn, slug: Optional[str]) -> tuple[int, str]:
     """
     if slug:
         row = conn.execute(
-            "SELECT id, slug FROM profiles WHERE slug = ?", (slug,)
+            "SELECT id, slug FROM profiles WHERE slug = ? OR display_name = ?",
+            (slug, slug),
         ).fetchone()
         if not row:
             raise HTTPException(404, f"profile '{slug}' not found")
