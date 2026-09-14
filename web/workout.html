@@ -357,7 +357,7 @@
       <div class="field"><label>단계</label>
         <select id="in-phase">
           <option value="1">1단계 — 머신 5종 (3×10)</option>
-          <option value="2">2단계 — 7종 전신 (3×8~12)</option>
+          <option value="2">2단계 — 7종 전신 (하체 3×8~12 · 상체 3×8~15)</option>
         </select>
       </div>
       <div class="field" id="hinge-field" style="display:none"><label>힙 힌지 종목</label>
@@ -426,7 +426,7 @@
     <div class="guide-card">
       <h4><span class="tag">2</span>2단계 — 3주차~약 3개월, 7종 전신</h4>
       <ul>
-        <li><a class="pf-link" href="https://planfit.ai/ko/exercise/seated-leg-press" target="_blank" rel="noopener">레그프레스</a> → 힙 힌지 → <a class="pf-link" href="https://planfit.ai/ko/exercise/chest-press-machine" target="_blank" rel="noopener">체스트</a> → <a class="pf-link" href="https://planfit.ai/ko/exercise/shoulder-press-machine" target="_blank" rel="noopener">숄더</a> → <a class="pf-link" href="https://planfit.ai/ko/exercise/lat-pulldown" target="_blank" rel="noopener">랫풀</a> → <a class="pf-link" href="https://planfit.ai/ko/exercise/seated-cable-row" target="_blank" rel="noopener">로우</a> → <a class="pf-link" href="https://planfit.ai/ko/exercise/seated-leg-curl" target="_blank" rel="noopener">레그컬</a>, 각 <strong>3×8~12</strong></li>
+        <li><a class="pf-link" href="https://planfit.ai/ko/exercise/seated-leg-press" target="_blank" rel="noopener">레그프레스</a> → 힙 힌지 → <a class="pf-link" href="https://planfit.ai/ko/exercise/chest-press-machine" target="_blank" rel="noopener">체스트</a> → <a class="pf-link" href="https://planfit.ai/ko/exercise/shoulder-press-machine" target="_blank" rel="noopener">숄더</a> → <a class="pf-link" href="https://planfit.ai/ko/exercise/lat-pulldown" target="_blank" rel="noopener">랫풀</a> → <a class="pf-link" href="https://planfit.ai/ko/exercise/seated-cable-row" target="_blank" rel="noopener">로우</a> → <a class="pf-link" href="https://planfit.ai/ko/exercise/seated-leg-curl" target="_blank" rel="noopener">레그컬</a>, 하체 <strong>3×8~12</strong> · 상체 <strong>3×8~15</strong></li>
         <li>힙 힌지: <strong>4~6주차 <a class="pf-link" href="https://planfit.ai/ko/exercise/back-extension" target="_blank" rel="noopener">백 익스텐션</a></strong>(통증 없는 가동범위, 맨몸부터) → <strong>7주차~ <a class="pf-link" href="https://planfit.ai/ko/exercise/dumbbell-romanian-deadlift" target="_blank" rel="noopener">덤벨 RDL</a></strong>(가벼운 덤벨부터, 허리 중립)</li>
         <li>숄더프레스: 등받이에 등 붙이고</li>
         <li>휴식 90초~2분 · 세션 55~60분</li>
@@ -435,8 +435,8 @@
     <div class="guide-card">
       <h4><span class="tag">↑</span>점진적 과부하 (2단계의 핵심)</h4>
       <ul>
-        <li><strong>3세트 모두 12회 성공 → 다음 세션 중량 올리고 8회부터</strong></li>
-        <li>증량 폭: 상체 <strong>+2.5kg</strong>, 하체 <strong>+5kg</strong> 또는 머신 한 칸</li>
+        <li><strong>3세트 모두 상한(하체 12회 · 상체 15회) 성공 → 다음 세션 +5kg, 8회부터</strong></li>
+        <li>머신 최소 단위가 <strong>5kg 한 칸</strong> — 상체는 15회까지 반복수로 완충 후 증량 (덤벨 RDL만 +2.5kg 가능)</li>
         <li>매 세션 직전 지난 기록 확인 → 최소 한 종목 갱신 시도</li>
         <li>기록 없는 세션은 없었던 세션입니다</li>
       </ul>
@@ -496,7 +496,11 @@ const PF_URL = (ex) => `https://planfit.ai/ko/exercise/${EXERCISES[ex].pf}`;
 const PHASE1 = ["legpress", "chestpress", "latpulldown", "seatedrow", "legcurl"];
 const PHASE2 = (hinge) => ["legpress", hinge, "chestpress", "shoulderpress", "latpulldown", "seatedrow", "legcurl"];
 const COLS = ["legpress", "hinge", "chest", "shoulder", "lat", "row", "legcurl"]; // 테이블 열 순서
-const INC = (ex) => EXERCISES[ex].cat === "upper" ? 2.5 : 5;
+// 헬스장 머신이 5kg 단위로만 조절됨 → 증량 폭은 전 종목 +5kg.
+// 상체는 +5kg 점프(~17%)가 커서 반복수 상한을 15회로 넓혀 완충한다.
+// 덤벨 RDL만 머신 제약과 무관하므로 +2.5kg 유지.
+const INC = (ex) => ex === "rdl" ? 2.5 : 5;
+const REP_MAX = (ex) => EXERCISES[ex].cat === "upper" ? 15 : 12;
 
 /* ───────────────────────── 저장소 (서버 DB) ─────────────── */
 // 우선순위: URL ?profile= (공유/즐겨찾기용) > localStorage (사이트 공통 선택)
@@ -600,16 +604,16 @@ function fmtSets(sets) {
   if (ws.length === 1) return `${fmtW(ws[0])}kg · ${sets.map(t => t.reps ?? "–").join("/")}`;
   return sets.map(t => `${fmtW(t.weight)}×${t.reps ?? "–"}`).join(" ");
 }
-/* 3세트 모두 12회 성공 여부 (2단계 증량 트리거) */
-function hitAll12(sets) {
+/* 3세트 모두 반복수 상한(하체 12회·상체 15회) 성공 여부 — 2단계 증량 트리거 */
+function hitRepTop(sets, ex) {
   const done = sets.filter(t => t.reps != null);
-  return done.length >= 3 && done.every(t => t.reps >= 12);
+  return done.length >= 3 && done.every(t => t.reps >= REP_MAX(ex));
 }
 function progressionFor(ex, excludeDate) {
   const last = lastSessionWith(ex, excludeDate);
   if (!last) return null;
   const sets = exSets(last, ex);
-  if (last.phase === 2 && hitAll12(sets)) {
+  if (last.phase === 2 && hitRepTop(sets, ex)) {
     const top = bestSet(sets);
     if (top && top.weight != null) return { from: top.weight, to: top.weight + INC(ex) };
   }
@@ -653,7 +657,7 @@ function buildForm(prefill) {
   box.innerHTML = "";
   plan.forEach((ex, idx) => {
     const meta = EXERCISES[ex];
-    const target = phase === 1 ? "3×10" : "3×8~12";
+    const target = phase === 1 ? "3×10" : `3×8~${REP_MAX(ex)}`;
     const last = lastSessionWith(ex, editingDate);
     const lastSets = last ? exSets(last, ex) : [];
     const prog = phase === 2 ? progressionFor(ex, editingDate) : null;
@@ -672,7 +676,7 @@ function buildForm(prefill) {
         pre.push({ w: t?.weight ?? "", r: "" });
       }
     }
-    const repsPH = phase === 1 ? "10" : (prog ? "8" : "8~12");
+    const repsPH = phase === 1 ? "10" : (prog ? "8" : `8~${REP_MAX(ex)}`);
 
     const row = document.createElement("div");
     row.className = "ex-row";
@@ -682,7 +686,7 @@ function buildForm(prefill) {
         <div><span class="ex-no">${idx + 1}</span><span class="ex-name"><a href="${PF_URL(ex)}" target="_blank" rel="noopener" title="플랜핏 동작 가이드">${meta.name}<span class="ex-guide-ic">↗</span></a></span><span class="ex-target">${target}</span></div>
         ${note ? `<div class="ex-note">${note}</div>` : ""}
         <div class="ex-last"><span class="lbl">지난 기록</span> ${lastSets.length ? `${fmtSets(lastSets)} <span class="lbl">(${last.date})</span>` : "없음"}</div>
-        ${prog ? `<span class="ex-hint">▲ 3×12 달성 — ${fmtW(prog.from)}→${fmtW(prog.to)}kg, 8회부터</span>` : ""}
+        ${prog ? `<span class="ex-hint">▲ 3×${REP_MAX(ex)} 달성 — ${fmtW(prog.from)}→${fmtW(prog.to)}kg, 8회부터</span>` : ""}
       </div>
       <div class="ex-sets">
         ${[0, 1, 2].map(i => `
@@ -837,7 +841,7 @@ function renderTiles() {
   tiles.push(`<div class="tile">
     <div class="label">${graduated ? "단계" : "1단계 졸업까지"}</div>
     <div class="value">${graduated ? "2단계" : `${p1}<span class="unit">/6</span>`}</div>
-    <div class="sub">${graduated ? "7종 전신 · 3×8~12" : "6세션 개근 + 5종목 중량 기록"}</div>
+    <div class="sub">${graduated ? "7종 전신 · 하체 ~12 · 상체 ~15" : "6세션 개근 + 5종목 중량 기록"}</div>
     <div class="bar"><div style="width:${Math.min(100, p1 / 6 * 100)}%"></div></div>
   </div>`);
   tiles.push(`<div class="tile">
@@ -866,9 +870,9 @@ function renderVerdict() {
       .filter(ex => progressionFor(ex, null))
       .map(ex => EXERCISES[ex].name);
     if (last.phase === 2 && dueUp.length) {
-      v = { cls: "good", icon: "▲", title: `다음 세션 증량: ${dueUp.length}종목`, body: `${dueUp.join(", ")} — 3세트 모두 12회 성공. 중량 올리고 8회부터 다시 시작 (상체 +2.5kg, 하체 +5kg).` };
+      v = { cls: "good", icon: "▲", title: `다음 세션 증량: ${dueUp.length}종목`, body: `${dueUp.join(", ")} — 3세트 모두 목표 상한(하체 12회 · 상체 15회) 성공. +5kg(머신 한 칸) 올리고 8회부터 다시 시작.` };
     } else if (p1Count() === 6 && last.phase === 1) {
-      v = { cls: "good", icon: "◆", title: "1단계 졸업", body: "6세션 완료 — 다음 세션부터 2단계(7종 전신, 3×8~12)로 진행하세요. 힙 힌지는 백 익스텐션부터." };
+      v = { cls: "good", icon: "◆", title: "1단계 졸업", body: "6세션 완료 — 다음 세션부터 2단계(7종 전신, 하체 3×8~12 · 상체 3×8~15)로 진행하세요. 힙 힌지는 백 익스텐션부터." };
     } else {
       v = { cls: "warning", icon: "◔", title: "이번 세션 목표", body: "지난 기록 확인 후 최소 한 종목에서 중량 또는 횟수 갱신을 시도하세요." };
     }
