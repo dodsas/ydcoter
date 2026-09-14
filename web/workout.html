@@ -264,6 +264,11 @@
     border: 1px solid var(--baseline); color: var(--ink-2); padding: 1px 5px;
   }
   .phase-badge.p2 { border-color: var(--series-2); color: var(--series-2); }
+  .week-chip {
+    font-size: 10px; font-family: var(--font-mono);
+    border: 1px solid var(--series-1); color: var(--series-1);
+    padding: 1px 5px; margin-left: 4px; vertical-align: 1px;
+  }
   .disc-chip { font-family: var(--font-mono); font-size: 11px; padding: 1px 6px; border: 1px solid transparent; }
   .disc-chip.ok      { color: var(--good);    border-color: var(--good); }
   .disc-chip.watch   { color: var(--warning); border-color: var(--warning); }
@@ -348,7 +353,7 @@
   <div class="sec-label"><span class="n">02</span> 세션 기록 <span class="edit-badge" id="edit-badge"></span></div>
   <div class="entry" id="entry">
     <div class="entry-top">
-      <div class="field"><label>날짜</label><input type="date" id="in-date"></div>
+      <div class="field"><label>날짜 <span class="week-chip" id="in-week" style="display:none"></span></label><input type="date" id="in-date"></div>
       <div class="field"><label>단계</label>
         <select id="in-phase">
           <option value="1">1단계 — 머신 5종 (3×10)</option>
@@ -618,12 +623,29 @@ function mondayOf(dateStr) {
 }
 const p1Count = () => sessions.filter(s => s.phase === 1).length;
 
+/* 프로그램 주차 — 첫 세션이 속한 주(월요일 시작)가 1주차. 가이드의
+   "4~6주차 백 익스텐션 → 7주차~ RDL" 주차와 같은 기준. */
+function programWeek(dateStr) {
+  if (!dateStr || !sessions.length) return null;
+  const start = mondayOf(sessions.map(s => s.date).sort()[0]);
+  const days = (new Date(mondayOf(dateStr) + "T00:00:00") - new Date(start + "T00:00:00")) / 86400000;
+  const w = Math.round(days / 7) + 1;
+  return w >= 1 ? w : null;
+}
+function renderWeekChip() {
+  const chip = $("in-week");
+  const w = programWeek($("in-date").value);
+  chip.textContent = w ? `${w}주차` : "";
+  chip.style.display = w ? "" : "none";
+}
+
 /* ───────────────────────── 입력 폼 ───────────────────────── */
 function currentPlan() {
   const phase = parseInt($("in-phase").value, 10);
   return phase === 1 ? PHASE1 : PHASE2($("in-hinge").value);
 }
 function buildForm(prefill) {
+  renderWeekChip();
   const phase = parseInt($("in-phase").value, 10);
   $("hinge-field").style.display = phase === 2 ? "" : "none";
   const plan = currentPlan();
@@ -753,6 +775,7 @@ function resetForm() {
 }
 
 /* ───────────────────────── 저장/삭제 ─────────────────────── */
+$("in-date").addEventListener("change", renderWeekChip);
 $("in-phase").addEventListener("change", () => buildForm(editingDate ? sessions.find(s => s.date === editingDate) : null));
 $("in-hinge").addEventListener("change", () => buildForm(editingDate ? sessions.find(s => s.date === editingDate) : null));
 $("btn-cancel-edit").addEventListener("click", cancelEdit);
@@ -785,9 +808,11 @@ function renderTiles() {
   const last = sessions[sessions.length - 1];
   const p1 = p1Count();
   const graduated = p1 >= 6;
-  $("phase-label").textContent = graduated ? "2단계" : `1단계 ${p1}/6`;
 
   const today = new Date().toISOString().slice(0, 10);
+  const wk = programWeek(today);
+  $("phase-label").textContent =
+    (graduated ? "2단계" : `1단계 ${p1}/6`) + (wk ? ` · ${wk}주차` : "");
   const weekStart = mondayOf(today);
   const thisWeek = sessions.filter(s => s.date >= weekStart).length;
 
