@@ -109,6 +109,15 @@ def _ensure_schema() -> None:
 # ===========================================================================
 
 
+def _profile_query():
+    """Shared ``profile`` query param so /docs always shows tteoni as the example."""
+    return Query(
+        None,
+        description="프로필 슬러그 또는 한글 이름 (생략 시 첫 번째 프로필)",
+        examples=["tteoni"],
+    )
+
+
 def _resolve_profile(conn, slug: Optional[str]) -> tuple[int, str]:
     """Return ``(id, slug)`` for the given slug, or fall back to the first profile.
 
@@ -192,7 +201,7 @@ def list_profiles() -> List[Profile]:
 
 
 @app.get("/categories")
-def categories(profile: Optional[str] = Query(None)) -> List[dict]:
+def categories(profile: Optional[str] = _profile_query()) -> List[dict]:
     with get_local_conn() as conn:
         pid = _resolve_profile_id(conn, profile)
         rows = conn.execute(
@@ -210,7 +219,7 @@ def categories(profile: Optional[str] = Query(None)) -> List[dict]:
 
 @app.get("/items", response_model=List[TestItem])
 def list_items(
-    profile: Optional[str] = Query(None, description="프로필 슬러그"),
+    profile: Optional[str] = _profile_query(),
     major: Optional[str] = Query(None, description="대분류 필터"),
     minor: Optional[str] = Query(None, description="소분류 필터"),
     q: Optional[str] = Query(None, description="이름/코드 부분 검색"),
@@ -270,7 +279,7 @@ def item_trend(item_id: int) -> Trend:
 
 @app.get("/measurements", response_model=List[Measurement])
 def list_measurements(
-    profile: Optional[str] = Query(None),
+    profile: Optional[str] = _profile_query(),
     year: Optional[int] = Query(None),
     status: Optional[str] = Query(None, description="NORMAL | LOW | HIGH"),
     major: Optional[str] = Query(None),
@@ -300,7 +309,7 @@ def list_measurements(
 @app.get("/abnormal/{year}", response_model=List[Measurement])
 def abnormal_for_year(
     year: int,
-    profile: Optional[str] = Query(None),
+    profile: Optional[str] = _profile_query(),
 ) -> List[Measurement]:
     with get_local_conn() as conn:
         pid = _resolve_profile_id(conn, profile)
@@ -321,7 +330,7 @@ def abnormal_for_year(
 
 
 @app.get("/nutrition/dates", response_model=List[NutritionDateSummary])
-def nutrition_dates(profile: Optional[str] = Query(None)) -> List[NutritionDateSummary]:
+def nutrition_dates(profile: Optional[str] = _profile_query()) -> List[NutritionDateSummary]:
     """List every date that has at least one logged food entry, newest first."""
     with get_local_conn() as lconn:
         pid = _resolve_profile_id(lconn, profile)
@@ -357,7 +366,7 @@ def nutrition_dates(profile: Optional[str] = Query(None)) -> List[NutritionDateS
 @app.get("/nutrition/{log_date}", response_model=DailyNutrition)
 def nutrition_for_day(
     log_date: str,
-    profile: Optional[str] = Query(None),
+    profile: Optional[str] = _profile_query(),
 ) -> DailyNutrition:
     """Return all food entries + computed nutrient totals for a single day."""
     with get_local_conn() as lconn:
@@ -467,7 +476,7 @@ _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 def nutrition_parse(
     log_date: str,
     body: NutritionParseRequest,
-    profile: Optional[str] = Query(None),
+    profile: Optional[str] = _profile_query(),
 ) -> NutritionParseResponse:
     """Parse a free-text food log via Claude and insert structured rows.
 
@@ -613,7 +622,7 @@ _BODY_COLS = (
 
 
 @app.get("/body/records", response_model=List[BodyRecord])
-def body_records(profile: Optional[str] = Query(None)) -> List[BodyRecord]:
+def body_records(profile: Optional[str] = _profile_query()) -> List[BodyRecord]:
     """All circumference records for a profile, oldest first (Day 0 first)."""
     with get_local_conn() as lconn:
         pid = _resolve_profile_id(lconn, profile)
@@ -634,7 +643,7 @@ def body_records(profile: Optional[str] = Query(None)) -> List[BodyRecord]:
 def body_record_upsert(
     record_date: str,
     body: BodyRecordIn,
-    profile: Optional[str] = Query(None),
+    profile: Optional[str] = _profile_query(),
 ) -> BodyRecord:
     """Insert or replace the record for one date (date = natural key)."""
     if not _DATE_RE.match(record_date):
@@ -659,7 +668,7 @@ def body_record_upsert(
 @app.delete("/body/records/{record_date}")
 def body_record_delete(
     record_date: str,
-    profile: Optional[str] = Query(None),
+    profile: Optional[str] = _profile_query(),
 ) -> dict:
     if not _DATE_RE.match(record_date):
         raise HTTPException(422, "record_date must be ISO YYYY-MM-DD")
@@ -680,7 +689,7 @@ def body_record_delete(
 
 
 @app.get("/weight/records", response_model=List[WeightRecord])
-def weight_records(profile: Optional[str] = Query(None)) -> List[WeightRecord]:
+def weight_records(profile: Optional[str] = _profile_query()) -> List[WeightRecord]:
     """All weekly weigh-ins for a profile, oldest first."""
     with get_local_conn() as lconn:
         pid = _resolve_profile_id(lconn, profile)
@@ -701,7 +710,7 @@ def weight_records(profile: Optional[str] = Query(None)) -> List[WeightRecord]:
 def weight_record_upsert(
     record_date: str,
     body: WeightRecordIn,
-    profile: Optional[str] = Query(None),
+    profile: Optional[str] = _profile_query(),
 ) -> WeightRecord:
     """Insert or replace the weigh-in for one date (date = natural key)."""
     if not _DATE_RE.match(record_date):
@@ -725,7 +734,7 @@ def weight_record_upsert(
 @app.delete("/weight/records/{record_date}")
 def weight_record_delete(
     record_date: str,
-    profile: Optional[str] = Query(None),
+    profile: Optional[str] = _profile_query(),
 ) -> dict:
     if not _DATE_RE.match(record_date):
         raise HTTPException(422, "record_date must be ISO YYYY-MM-DD")
@@ -774,7 +783,7 @@ def _inbody_upsert(record_date: str, body: InbodyRecordIn, profile: Optional[str
 
 
 @app.get("/inbody/records", response_model=List[InbodyRecord])
-def inbody_records(profile: Optional[str] = Query(None)) -> List[InbodyRecord]:
+def inbody_records(profile: Optional[str] = _profile_query()) -> List[InbodyRecord]:
     """All InBody measurements for a profile, oldest first."""
     with get_local_conn() as lconn:
         pid = _resolve_profile_id(lconn, profile)
@@ -794,7 +803,7 @@ def inbody_records(profile: Optional[str] = Query(None)) -> List[InbodyRecord]:
 @app.post("/inbody", response_model=InbodyRecord)
 def inbody_record_create(
     body: InbodyRecordCreate,
-    profile: Optional[str] = Query(None),
+    profile: Optional[str] = _profile_query(),
 ) -> InbodyRecord:
     """Create/replace a record with the date in the payload (curl-friendly)."""
     return _inbody_upsert(body.date, body, profile)
@@ -804,7 +813,7 @@ def inbody_record_create(
 def inbody_record_upsert(
     record_date: str,
     body: InbodyRecordIn,
-    profile: Optional[str] = Query(None),
+    profile: Optional[str] = _profile_query(),
 ) -> InbodyRecord:
     """Insert or replace the record for one date (date = natural key)."""
     return _inbody_upsert(record_date, body, profile)
@@ -813,7 +822,7 @@ def inbody_record_upsert(
 @app.delete("/inbody/records/{record_date}")
 def inbody_record_delete(
     record_date: str,
-    profile: Optional[str] = Query(None),
+    profile: Optional[str] = _profile_query(),
 ) -> dict:
     if not _DATE_RE.match(record_date):
         raise HTTPException(422, "record_date must be ISO YYYY-MM-DD")
@@ -834,7 +843,7 @@ def inbody_record_delete(
 
 
 @app.get("/workout/sessions", response_model=List[WorkoutSession])
-def workout_sessions(profile: Optional[str] = Query(None)) -> List[WorkoutSession]:
+def workout_sessions(profile: Optional[str] = _profile_query()) -> List[WorkoutSession]:
     """All training sessions with their sets, oldest first."""
     with get_local_conn() as lconn:
         pid = _resolve_profile_id(lconn, profile)
@@ -885,7 +894,7 @@ def workout_sessions(profile: Optional[str] = Query(None)) -> List[WorkoutSessio
 def workout_session_upsert(
     session_date: str,
     body: WorkoutSessionIn,
-    profile: Optional[str] = Query(None),
+    profile: Optional[str] = _profile_query(),
 ) -> WorkoutSession:
     """Insert or replace the session for one date; sets are replaced wholesale."""
     if not _DATE_RE.match(session_date):
@@ -924,7 +933,7 @@ def workout_session_upsert(
 @app.delete("/workout/sessions/{session_date}")
 def workout_session_delete(
     session_date: str,
-    profile: Optional[str] = Query(None),
+    profile: Optional[str] = _profile_query(),
 ) -> dict:
     if not _DATE_RE.match(session_date):
         raise HTTPException(422, "session_date must be ISO YYYY-MM-DD")
@@ -952,7 +961,7 @@ def workout_session_delete(
 @app.get("/dashboard/health-records", response_model=HealthRecords)
 def dashboard_health_records(
     years: int = Query(1, ge=1, le=30, description="최근 N개 검진 연도"),
-    profile: Optional[str] = Query(None),
+    profile: Optional[str] = _profile_query(),
 ) -> HealthRecords:
     """최근 N개 검진 연도의 건강검진 지표(혈당 등 measurements)를 반환.
 
