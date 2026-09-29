@@ -340,15 +340,13 @@ class WorkoutPlanMilestone(BaseModel):
 
 
 class WorkoutPlan(BaseModel):
-    """현재 상태 + 다음 세션 처방 + 앞으로의 로드맵."""
+    """전체 운동 플랜 — 세션 이력만으로 계산 (기준일 없음)."""
 
     profile: str
-    as_of: str
     started: Optional[str] = None  # 첫 세션 날짜
     sessions_total: int
-    sessions_this_week: int
     frequency_per_week: int = 3
-    program_week: Optional[int] = None  # 첫 세션 주(월요일 시작) = 1주차
+    program_week: Optional[int] = None  # 마지막 세션 기준 주차 (첫 세션 주 = 1주차)
     phase: int  # 다음 세션에 적용할 단계
     phase1_done: int
     phase1_target: int = 6

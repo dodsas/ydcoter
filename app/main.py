@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -898,21 +898,12 @@ def workout_sessions(profile: Optional[str] = _profile_query()) -> List[WorkoutS
 
 
 @app.get("/workout/plan", response_model=WorkoutPlan)
-def workout_plan(
-    profile: Optional[str] = _profile_query(),
-    as_of: Optional[str] = Query(
-        None,
-        description="기준일 YYYY-MM-DD (생략 시 오늘) — 주차·이번 주 세션 수 계산 기준",
-    ),
-) -> WorkoutPlan:
-    """현재 단계·다음 세션 처방(종목별 목표 세트/반복/제안 중량)·앞으로의 로드맵."""
-    if as_of and not _DATE_RE.match(as_of):
-        raise HTTPException(422, "as_of must be ISO YYYY-MM-DD")
+def workout_plan(profile: Optional[str] = _profile_query()) -> WorkoutPlan:
+    """전체 운동 플랜 — 단계·주차·다음 세션 처방·로드맵. 세션 이력만으로
+    계산하며 오늘 날짜에 의존하지 않는다 (주차는 마지막 세션 기준)."""
     with get_local_conn() as lconn:
         pid, slug = _resolve_profile(lconn, profile)
-    sessions = _load_workout_sessions(pid)
-    today = date.fromisoformat(as_of) if as_of else date.today()
-    return build_plan(slug, sessions, today)
+    return build_plan(slug, _load_workout_sessions(pid))
 
 
 @app.put("/workout/sessions/{session_date}", response_model=WorkoutSession)

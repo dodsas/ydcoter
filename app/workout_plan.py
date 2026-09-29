@@ -94,13 +94,14 @@ def _progression(sessions: List[WorkoutSession], ex: str) -> Optional[tuple[floa
     return top.weight_kg, top.weight_kg + _inc(ex)
 
 
-def _program_week(sessions: List[WorkoutSession], as_of: date) -> Optional[int]:
-    """첫 세션이 속한 주(월요일 시작)가 1주차."""
+def _program_week(sessions: List[WorkoutSession]) -> Optional[int]:
+    """마지막 세션이 속한 주차 — 첫 세션 주(월요일 시작)가 1주차.
+    오늘 날짜에 의존하지 않고 기록된 이력만으로 계산한다."""
     if not sessions:
         return None
     start = _monday_of(date.fromisoformat(sessions[0].session_date))
-    week = (_monday_of(as_of) - start).days // 7 + 1
-    return week if week >= 1 else None
+    last = _monday_of(date.fromisoformat(sessions[-1].session_date))
+    return (last - start).days // 7 + 1
 
 
 def _pick_hinge(sessions: List[WorkoutSession], week: Optional[int]) -> str:
@@ -123,11 +124,11 @@ def _milestone_status(week: Optional[int], start_w: int, end_w: Optional[int]) -
     return "current"
 
 
-def build_plan(slug: str, sessions: List[WorkoutSession], as_of: date) -> WorkoutPlan:
-    """세션 이력(날짜 오름차순)으로 현재 상태·다음 세션 처방·로드맵을 만든다."""
+def build_plan(slug: str, sessions: List[WorkoutSession]) -> WorkoutPlan:
+    """세션 이력(날짜 오름차순)만으로 전체 플랜을 만든다 — 기준일 없음."""
     p1_done = sum(1 for s in sessions if s.phase == 1)
     phase = 2 if p1_done >= PHASE1_TARGET else 1
-    week = _program_week(sessions, as_of)
+    week = _program_week(sessions)
     hinge = _pick_hinge(sessions, week) if phase == 2 else None
     plan = PHASE1 if phase == 1 else _phase2(hinge)
 
@@ -208,13 +209,10 @@ def build_plan(slug: str, sessions: List[WorkoutSession], as_of: date) -> Workou
             "마지막 올린 중량을 롤백하세요. 다리 저림·방사통·힘 빠짐이 새로 생겼다면 진료 대상."
         )
 
-    week_start = _monday_of(as_of).isoformat()
     return WorkoutPlan(
         profile=slug,
-        as_of=as_of.isoformat(),
         started=sessions[0].session_date if sessions else None,
         sessions_total=len(sessions),
-        sessions_this_week=sum(1 for s in sessions if s.session_date >= week_start),
         program_week=week,
         phase=phase,
         phase1_done=p1_done,
