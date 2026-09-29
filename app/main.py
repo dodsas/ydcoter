@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -52,11 +52,13 @@ from app.models import (
     WeightRecord,
     WeightRecordIn,
     TrendPoint,
+    WorkoutPlan,
     WorkoutSession,
     WorkoutSessionIn,
     WorkoutSet,
 )
 from app.nutrition_parser import parse_food_text
+from app.workout_plan import build_plan
 from app.yclaude_client import YClaudeError
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -842,11 +844,8 @@ def inbody_record_delete(
 # ===========================================================================
 
 
-@app.get("/workout/sessions", response_model=List[WorkoutSession])
-def workout_sessions(profile: Optional[str] = _profile_query()) -> List[WorkoutSession]:
+def _load_workout_sessions(pid: int) -> List[WorkoutSession]:
     """All training sessions with their sets, oldest first."""
-    with get_local_conn() as lconn:
-        pid = _resolve_profile_id(lconn, profile)
     with get_conn() as conn:
         srows = conn.execute(
             """
@@ -888,6 +887,32 @@ def workout_sessions(profile: Optional[str] = _profile_query()) -> List[WorkoutS
         )
         for s in srows
     ]
+
+
+@app.get("/workout/sessions", response_model=List[WorkoutSession])
+def workout_sessions(profile: Optional[str] = _profile_query()) -> List[WorkoutSession]:
+    """All training sessions with their sets, oldest first."""
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
+    return _load_workout_sessions(pid)
+
+
+@app.get("/workout/plan", response_model=WorkoutPlan)
+def workout_plan(
+    profile: Optional[str] = _profile_query(),
+    as_of: Optional[str] = Query(
+        None,
+        description="기준일 YYYY-MM-DD (생략 시 오늘) — 주차·이번 주 세션 수 계산 기준",
+    ),
+) -> WorkoutPlan:
+    """현재 단계·다음 세션 처방(종목별 목표 세트/반복/제안 중량)·앞으로의 로드맵."""
+    if as_of and not _DATE_RE.match(as_of):
+        raise HTTPException(422, "as_of must be ISO YYYY-MM-DD")
+    with get_local_conn() as lconn:
+        pid, slug = _resolve_profile(lconn, profile)
+    sessions = _load_workout_sessions(pid)
+    today = date.fromisoformat(as_of) if as_of else date.today()
+    return build_plan(slug, sessions, today)
 
 
 @app.put("/workout/sessions/{session_date}", response_model=WorkoutSession)

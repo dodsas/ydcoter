@@ -309,6 +309,56 @@ class WorkoutSession(WorkoutSessionIn):
     session_date: str
 
 
+class WorkoutPlanExercise(BaseModel):
+    """다음 세션에서 수행할 한 종목의 처방."""
+
+    exercise: str  # slug
+    name: str
+    category: str  # lower | upper
+    order: int  # 세션 내 수행 순서 (1부터)
+    target_sets: int = 3
+    target_reps_min: int
+    target_reps_max: int
+    suggested_weight_kg: Optional[float] = None
+    progression_due: bool = False  # 지난 세션 3세트 모두 반복 상한 성공 → 증량 차례
+    progression_from_kg: Optional[float] = None
+    progression_to_kg: Optional[float] = None
+    last_date: Optional[str] = None
+    last_sets: List[WorkoutSet] = []
+    note: Optional[str] = None
+    guide_url: str
+
+
+class WorkoutPlanMilestone(BaseModel):
+    """프로그램 로드맵 한 구간 — 지금 어디까지 왔는지 status 로 표시."""
+
+    key: str
+    title: str
+    period: str  # 사람이 읽는 기간 표기 ("1~2주차" 등)
+    detail: str
+    status: str  # done | current | upcoming
+
+
+class WorkoutPlan(BaseModel):
+    """현재 상태 + 다음 세션 처방 + 앞으로의 로드맵."""
+
+    profile: str
+    as_of: str
+    started: Optional[str] = None  # 첫 세션 날짜
+    sessions_total: int
+    sessions_this_week: int
+    frequency_per_week: int = 3
+    program_week: Optional[int] = None  # 첫 세션 주(월요일 시작) = 1주차
+    phase: int  # 다음 세션에 적용할 단계
+    phase1_done: int
+    phase1_target: int = 6
+    hinge: Optional[str] = None  # 2단계 힙 힌지 종목 (backext | rdl)
+    caution: Optional[str] = None  # 허리 불편감 경고 등
+    next_session: List[WorkoutPlanExercise]
+    milestones: List[WorkoutPlanMilestone]
+    rules: List[str]
+
+
 class HealthRecordItem(BaseModel):
     """검진 지표 한 건 — 이름/단위/참고치를 포함한 자기완결형 행.
 
