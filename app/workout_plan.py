@@ -17,14 +17,14 @@ from app.models import (
 )
 
 EXERCISES = {
-    "legpress": {"name": "레그프레스", "cat": "lower", "note1": "허리 등받이 밀착, 가동범위 3/4", "pf": "seated-leg-press"},
-    "backext": {"name": "백 익스텐션", "cat": "lower", "note2": "통증 없는 가동범위, 맨몸부터", "pf": "back-extension"},
+    "legpress": {"name": "레그프레스", "cat": "lower", "note1": "허리 등받이 밀착, 가동범위 3/4", "note2": "11자 정렬 · 깊이 컷 · 휴식 2~3분 또는 심박 110~115 복귀", "pf": "seated-leg-press"},
+    "backext": {"name": "백 익스텐션", "cat": "lower", "note2": "통증 없는 가동범위, 맨몸부터 — 코어 신선한 초반 고정", "pf": "back-extension"},
     "rdl": {"name": "덤벨 RDL", "cat": "lower", "note2": "허리 중립 유지 — 햄스트링이 당기는 느낌이 정답", "pf": "dumbbell-romanian-deadlift"},
-    "chestpress": {"name": "체스트프레스", "cat": "upper", "pf": "chest-press-machine"},
-    "shoulderpress": {"name": "숄더프레스", "cat": "upper", "note2": "등받이에 등 붙이고", "pf": "shoulder-press-machine"},
-    "latpulldown": {"name": "랫풀다운", "cat": "upper", "pf": "lat-pulldown"},
-    "seatedrow": {"name": "시티드 로우", "cat": "upper", "pf": "seated-cable-row"},
-    "legcurl": {"name": "레그컬", "cat": "lower", "pf": "seated-leg-curl"},
+    "chestpress": {"name": "체스트프레스", "cat": "upper", "note2": "프레스 1번 — 어깨가 가장 신선할 때 큰 것부터", "pf": "chest-press-machine"},
+    "shoulderpress": {"name": "숄더프레스", "cat": "upper", "note2": "예열(외회전+스캡 1분) 후 진입 · 등받이 밀착 · 세트 간 2분 · 판정은 왼쪽 기준", "pf": "shoulder-press-machine"},
+    "latpulldown": {"name": "랫풀다운", "cat": "upper", "note2": "완충 1 — 당기기로 전면삼각근은 대기 전력만", "pf": "lat-pulldown"},
+    "seatedrow": {"name": "시티드 로우", "cat": "upper", "note2": "마지막 — 어깨 안정화 부하뿐이라 피로 상태에서도 안전", "pf": "seated-cable-row"},
+    "legcurl": {"name": "레그컬", "cat": "lower", "note2": "프리텐션 · 발끝 세우기 — 숄더 직전 고정 칸(어깨 개입 0)", "pf": "seated-leg-curl"},
 }
 PHASE1 = ["legpress", "chestpress", "latpulldown", "seatedrow", "legcurl"]
 HINGES = ("backext", "rdl")
@@ -32,8 +32,10 @@ PHASE1_TARGET = 6  # 1단계 졸업 세션 수
 RDL_FROM_WEEK = 7  # 힙 힌지: 4~6주차 백 익스텐션 → 7주차~ 덤벨 RDL
 
 
+# 기본 배열(7종): 하체·허리 리스크 종목은 신선할 때 앞으로, 프레스 사이에
+# 완충 2칸(랫풀·레그컬), 가장 잘 크는 로우는 후순위 손해가 제일 작아 마지막.
 def _phase2(hinge: str) -> List[str]:
-    return ["legpress", hinge, "chestpress", "shoulderpress", "latpulldown", "seatedrow", "legcurl"]
+    return ["legpress", hinge, "chestpress", "latpulldown", "legcurl", "shoulderpress", "seatedrow"]
 
 
 # 머신 최소 단위 5kg → 증량 폭 전 종목 +5kg. 덤벨 RDL만 +2.5kg 가능.

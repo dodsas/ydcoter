@@ -402,7 +402,7 @@
     <table>
       <thead><tr>
         <th>날짜</th><th>단계</th><th>레그프레스</th><th>힙 힌지</th><th>체스트</th>
-        <th>숄더</th><th>랫풀다운</th><th>로우</th><th>레그컬</th><th>불편감</th><th></th>
+        <th>랫풀다운</th><th>레그컬</th><th>숄더</th><th>로우</th><th>불편감</th><th></th>
       </tr></thead>
       <tbody id="table-body">
         <tr><td colspan="11" style="text-align:center;color:var(--muted);padding:24px">기록 없음</td></tr>
@@ -426,10 +426,21 @@
     <div class="guide-card">
       <h4><span class="tag">2</span>2단계 — 3주차~약 3개월, 7종 전신</h4>
       <ul>
-        <li><a class="pf-link" href="https://planfit.ai/ko/exercise/seated-leg-press" target="_blank" rel="noopener">레그프레스</a> → 힙 힌지 → <a class="pf-link" href="https://planfit.ai/ko/exercise/chest-press-machine" target="_blank" rel="noopener">체스트</a> → <a class="pf-link" href="https://planfit.ai/ko/exercise/shoulder-press-machine" target="_blank" rel="noopener">숄더</a> → <a class="pf-link" href="https://planfit.ai/ko/exercise/lat-pulldown" target="_blank" rel="noopener">랫풀</a> → <a class="pf-link" href="https://planfit.ai/ko/exercise/seated-cable-row" target="_blank" rel="noopener">로우</a> → <a class="pf-link" href="https://planfit.ai/ko/exercise/seated-leg-curl" target="_blank" rel="noopener">레그컬</a>, 하체 <strong>3×8~12</strong> · 상체 <strong>3×8~15</strong></li>
+        <li><a class="pf-link" href="https://planfit.ai/ko/exercise/seated-leg-press" target="_blank" rel="noopener">레그프레스</a> → 힙 힌지 → <a class="pf-link" href="https://planfit.ai/ko/exercise/chest-press-machine" target="_blank" rel="noopener">체스트</a> → <a class="pf-link" href="https://planfit.ai/ko/exercise/lat-pulldown" target="_blank" rel="noopener">랫풀</a> → <a class="pf-link" href="https://planfit.ai/ko/exercise/seated-leg-curl" target="_blank" rel="noopener">레그컬</a> → <a class="pf-link" href="https://planfit.ai/ko/exercise/shoulder-press-machine" target="_blank" rel="noopener">숄더</a> → <a class="pf-link" href="https://planfit.ai/ko/exercise/seated-cable-row" target="_blank" rel="noopener">로우</a>, 하체 <strong>3×8~12</strong> · 상체 <strong>3×8~15</strong></li>
         <li>힙 힌지: <strong>4~6주차 <a class="pf-link" href="https://planfit.ai/ko/exercise/back-extension" target="_blank" rel="noopener">백 익스텐션</a></strong>(통증 없는 가동범위, 맨몸부터) → <strong>7주차~ <a class="pf-link" href="https://planfit.ai/ko/exercise/dumbbell-romanian-deadlift" target="_blank" rel="noopener">덤벨 RDL</a></strong>(가벼운 덤벨부터, 허리 중립)</li>
-        <li>숄더프레스: 등받이에 등 붙이고</li>
         <li>휴식 90초~2분 · 세션 55~60분</li>
+      </ul>
+    </div>
+    <div class="guide-card">
+      <h4><span class="tag">≡</span>기본 배열 (7종) — 순서 근거</h4>
+      <ul>
+        <li><strong>1 레그프레스</strong> — 워밍업 직후, 신선할 때. 11자 정렬 · 깊이 컷 · 휴식 2~3분 또는 심박 110~115 복귀</li>
+        <li><strong>2 백 익스텐션</strong> — 허리 리스크 종목은 코어가 신선한 초반에. RDL 전환 시에도 이 자리</li>
+        <li><strong>3 체스트프레스</strong> — 프레스 1번, 어깨가 가장 신선한 시점에 큰 것부터</li>
+        <li><strong>4 랫풀다운</strong> — 완충 1 (당기기 = 전면삼각근 대기 전력)</li>
+        <li><strong>5 레그컬</strong> — 완충 2, 숄더 직전 고정 칸(어깨 개입 0). 프리텐션 · 발끝 세우기</li>
+        <li><strong>6 숄더프레스</strong> — 프레스 2번. 세트 간 2분, 판정은 왼쪽 기준, 예열(외회전+스캡 1분) 후 진입</li>
+        <li><strong>7 시티드 로우</strong> — 마지막. 어깨 안정화 부하뿐이라 피로 상태에서도 안전, 가장 잘 크는 종목이라 후순위 손해가 가장 작음</li>
       </ul>
     </div>
     <div class="guide-card">
@@ -482,20 +493,22 @@
 "use strict";
 /* ───────────────────────── 프로그램 정의 ─────────────────── */
 const EXERCISES = {
-  legpress:      { name: "레그프레스",   cat: "lower", col: "legpress",  note1: "허리 등받이 밀착, 가동범위 3/4", pf: "seated-leg-press" },
-  backext:       { name: "백 익스텐션", cat: "lower", col: "hinge", note2: "통증 없는 가동범위, 맨몸부터", pf: "back-extension" },
+  legpress:      { name: "레그프레스",   cat: "lower", col: "legpress",  note1: "허리 등받이 밀착, 가동범위 3/4", note2: "11자 정렬 · 깊이 컷 · 휴식 2~3분 또는 심박 110~115 복귀", pf: "seated-leg-press" },
+  backext:       { name: "백 익스텐션", cat: "lower", col: "hinge", note2: "통증 없는 가동범위, 맨몸부터 — 코어 신선한 초반 고정", pf: "back-extension" },
   rdl:           { name: "덤벨 RDL",    cat: "lower", col: "hinge", note2: "허리 중립 유지 — 햄스트링이 당기는 느낌이 정답", pf: "dumbbell-romanian-deadlift" },
-  chestpress:    { name: "체스트프레스", cat: "upper", col: "chest", pf: "chest-press-machine" },
-  shoulderpress: { name: "숄더프레스",   cat: "upper", col: "shoulder", note2: "등받이에 등 붙이고", pf: "shoulder-press-machine" },
-  latpulldown:   { name: "랫풀다운",     cat: "upper", col: "lat", pf: "lat-pulldown" },
-  seatedrow:     { name: "시티드 로우",  cat: "upper", col: "row", pf: "seated-cable-row" },
-  legcurl:       { name: "레그컬",       cat: "lower", col: "legcurl", pf: "seated-leg-curl" },
+  chestpress:    { name: "체스트프레스", cat: "upper", col: "chest", note2: "프레스 1번 — 어깨가 가장 신선할 때 큰 것부터", pf: "chest-press-machine" },
+  shoulderpress: { name: "숄더프레스",   cat: "upper", col: "shoulder", note2: "예열(외회전+스캡 1분) 후 진입 · 등받이 밀착 · 세트 간 2분 · 판정은 왼쪽 기준", pf: "shoulder-press-machine" },
+  latpulldown:   { name: "랫풀다운",     cat: "upper", col: "lat", note2: "완충 1 — 당기기로 전면삼각근은 대기 전력만", pf: "lat-pulldown" },
+  seatedrow:     { name: "시티드 로우",  cat: "upper", col: "row", note2: "마지막 — 어깨 안정화 부하뿐이라 피로 상태에서도 안전", pf: "seated-cable-row" },
+  legcurl:       { name: "레그컬",       cat: "lower", col: "legcurl", note2: "프리텐션 · 발끝 세우기 — 숄더 직전 고정 칸(어깨 개입 0)", pf: "seated-leg-curl" },
 };
 // 플랜핏 운동 가이드 (자세·팁·자극부위) 링크
 const PF_URL = (ex) => `https://planfit.ai/ko/exercise/${EXERCISES[ex].pf}`;
 const PHASE1 = ["legpress", "chestpress", "latpulldown", "seatedrow", "legcurl"];
-const PHASE2 = (hinge) => ["legpress", hinge, "chestpress", "shoulderpress", "latpulldown", "seatedrow", "legcurl"];
-const COLS = ["legpress", "hinge", "chest", "shoulder", "lat", "row", "legcurl"]; // 테이블 열 순서
+// 기본 배열(7종): 하체·허리 리스크 종목은 신선할 때 앞으로, 프레스 사이에
+// 완충 2칸(랫풀·레그컬), 가장 잘 크는 로우는 후순위 손해가 제일 작아 마지막.
+const PHASE2 = (hinge) => ["legpress", hinge, "chestpress", "latpulldown", "legcurl", "shoulderpress", "seatedrow"];
+const COLS = ["legpress", "hinge", "chest", "lat", "legcurl", "shoulder", "row"]; // 테이블 열 순서 = 수행 순서
 // 헬스장 머신이 5kg 단위로만 조절됨 → 증량 폭은 전 종목 +5kg.
 // 상체는 +5kg 점프(~17%)가 커서 반복수 상한을 15회로 넓혀 완충한다.
 // 덤벨 RDL만 머신 제약과 무관하므로 +2.5kg 유지.
@@ -938,7 +951,7 @@ function renderTable() {
 const tooltip = $("tooltip");
 function renderCharts() {
   const box = $("charts");
-  const order = ["legpress", "backext", "rdl", "chestpress", "shoulderpress", "latpulldown", "seatedrow", "legcurl"];
+  const order = ["legpress", "backext", "rdl", "chestpress", "latpulldown", "legcurl", "shoulderpress", "seatedrow"];
   const usable = order.filter(ex =>
     sessions.filter(s => { const t = bestSet(exSets(s, ex)); return t && t.weight != null; }).length >= 2);
   if (!usable.length) {
