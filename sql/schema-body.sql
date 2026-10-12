@@ -59,6 +59,8 @@ CREATE TABLE IF NOT EXISTS workout_sets (
     set_no      INTEGER NOT NULL,                 -- 1..n
     weight_kg   REAL,
     reps        INTEGER,
+    skipped     INTEGER NOT NULL DEFAULT 0,       -- 1 = 수행 안 함 (집계·증량 판정 제외)
+    skip_reason TEXT,                             -- pain | no_machine | no_time
     UNIQUE (session_id, exercise, set_no)
 );
 

@@ -30,6 +30,9 @@ PHASE1 = ["legpress", "chestpress", "latpulldown", "seatedrow", "legcurl"]
 HINGES = ("backext", "rdl")
 PHASE1_TARGET = 6  # 1단계 졸업 세션 수
 RDL_FROM_WEEK = 7  # 힙 힌지: 4~6주차 백 익스텐션 → 7주차~ 덤벨 RDL
+# 허리 리스크 종목(힙 힌지)은 반복 상한을 채워도 같은 중량을 최소 2주 유지
+# 후 증량 — 백 익스텐션 10→15→20kg 연속 +5kg가 L5 에피소드로 이어진 이력.
+HINGE_HOLD_DAYS = 14
 
 
 # 기본 배열(7종): 하체·허리 리스크 종목은 신선할 때 앞으로, 프레스 사이에
@@ -60,7 +63,11 @@ def _monday_of(d: date) -> date:
 
 
 def _ex_sets(session: WorkoutSession, ex: str) -> List[WorkoutSet]:
-    return sorted((t for t in session.sets if t.exercise == ex), key=lambda t: t.set_no)
+    """수행한 세트만 — skipped 또는 0회(시도만 하고 못 든 기록)는 제외."""
+    return sorted(
+        (t for t in session.sets if t.exercise == ex and not t.skipped and t.reps != 0),
+        key=lambda t: t.set_no,
+    )
 
 
 def _last_session_with(sessions: List[WorkoutSession], ex: str) -> Optional[WorkoutSession]:
@@ -84,6 +91,31 @@ def _hit_rep_top(sets: List[WorkoutSet], ex: str) -> bool:
     return len(done) >= 3 and all(t.reps >= _rep_max(ex) for t in done)
 
 
+def _weight_history(sessions: List[WorkoutSession], ex: str) -> List[tuple[str, float, float]]:
+    """세션별 (날짜, 최고 중량, 볼륨=Σ중량×반복) — 수행 세트 기준, 오래된 순."""
+    out = []
+    for s in sessions:
+        sets = _ex_sets(s, ex)
+        top = _best_set(sets)
+        if top is None or top.weight_kg is None:
+            continue
+        vol = sum((t.weight_kg or 0) * (t.reps or 0) for t in sets)
+        out.append((s.session_date, top.weight_kg, vol))
+    return out
+
+
+def _hinge_hold_active(sessions: List[WorkoutSession], ex: str, weight: float) -> bool:
+    """힙 힌지 2주 유지 규칙 — 현재 중량을 처음 든 날로부터 14일 미만이면 증량 보류."""
+    if ex not in HINGES:
+        return False
+    hist = _weight_history(sessions, ex)
+    first = next((d for d, w, _ in hist if w >= weight), None)
+    if first is None:
+        return False
+    last = hist[-1][0]
+    return (date.fromisoformat(last) - date.fromisoformat(first)).days < HINGE_HOLD_DAYS
+
+
 def _progression(sessions: List[WorkoutSession], ex: str) -> Optional[tuple[float, float]]:
     last = _last_session_with(sessions, ex)
     if not last or last.phase != 2:
@@ -94,7 +126,28 @@ def _progression(sessions: List[WorkoutSession], ex: str) -> Optional[tuple[floa
     top = _best_set(sets)
     if top is None or top.weight_kg is None:
         return None
+    if _hinge_hold_active(sessions, ex, top.weight_kg):
+        return None
     return top.weight_kg, top.weight_kg + _inc(ex)
+
+
+def _stall_stats(sessions: List[WorkoutSession], ex: str) -> tuple[Optional[int], Optional[str]]:
+    """정체 카운터: (마지막 증량 후 수행 세션 수, 최근 3세션 볼륨 추세 up|flat|down)."""
+    hist = _weight_history(sessions, ex)
+    if not hist:
+        return None, None
+    since = 0
+    for i in range(len(hist) - 1, 0, -1):
+        if hist[i][1] > hist[i - 1][1]:
+            break
+        since += 1
+    trend = None
+    if len(hist) >= 2:
+        vols = [v for _, _, v in hist[-3:]]
+        base = vols[0] or 1
+        change = (vols[-1] - vols[0]) / base
+        trend = "up" if change > 0.05 else "down" if change < -0.05 else "flat"
+    return since, trend
 
 
 def _program_week(sessions: List[WorkoutSession]) -> Optional[int]:
@@ -147,6 +200,7 @@ def build_plan(slug: str, sessions: List[WorkoutSession]) -> WorkoutPlan:
             else next((t.weight_kg for t in last_sets if t.weight_kg is not None), None)
         )
         note = (meta.get("note1") if phase == 1 else meta.get("note2")) or meta.get("note1")
+        since, trend = _stall_stats(sessions, ex) if phase == 2 else (None, None)
         exercises.append(
             WorkoutPlanExercise(
                 exercise=ex,
@@ -159,6 +213,8 @@ def build_plan(slug: str, sessions: List[WorkoutSession]) -> WorkoutPlan:
                 progression_due=prog is not None,
                 progression_from_kg=prog[0] if prog else None,
                 progression_to_kg=prog[1] if prog else None,
+                sessions_since_increase=since,
+                volume_trend=trend,
                 last_date=last.session_date if last else None,
                 last_sets=last_sets,
                 note=note,
@@ -202,6 +258,8 @@ def build_plan(slug: str, sessions: List[WorkoutSession]) -> WorkoutPlan:
         "2단계 증량 트리거: 3세트 모두 반복 상한(머신 15회 · 덤벨 RDL 12회) 성공 → 한 칸 올리고 8회부터 재시작.",
         "머신은 15회까지 볼륨으로 완충 후 +5kg — 특히 레그프레스는 허리 부담상 중량보다 반복수 우선.",
         "덤벨 RDL만 +2kg 단위 증량 (아령 하나당 2kg 조절 — 기록·증량 모두 한 쪽 무게 기준).",
+        "힙 힌지(백 익스텐션·덤벨 RDL)는 상한을 채워도 같은 중량 2주 유지 후 증량 — 연속 +5kg가 허리 에피소드로 이어진 이력.",
+        "레그프레스와 힙 힌지를 같은 세션에서 동시에 증량하지 않기 — 허리 부하 종목은 한 번에 하나만.",
         "허리 불편감 3/10 이상이 다음날에도 지속되면 마지막 올린 중량 롤백. 다리 저림·방사통·힘 빠짐 신규 발생 시 진료 대상.",
     ]
 

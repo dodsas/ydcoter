@@ -105,6 +105,19 @@ def _ensure_schema() -> None:
             init_nutrition_schema(conn)
             init_body_schema(conn)
 
+    # 기존 DB 마이그레이션: CREATE IF NOT EXISTS 는 이미 있는 테이블에
+    # 새 컬럼을 추가하지 못하므로 ALTER 를 따로 시도한다 (있으면 무시).
+    with get_conn() as conn:
+        for ddl in (
+            "ALTER TABLE workout_sets ADD COLUMN skipped INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE workout_sets ADD COLUMN skip_reason TEXT",
+        ):
+            try:
+                conn.execute(ddl)
+                conn.commit()
+            except Exception:  # duplicate column — 이미 반영된 DB
+                pass
+
 
 # ===========================================================================
 # Profile resolution helpers
@@ -860,7 +873,8 @@ def _load_workout_sessions(pid: int) -> List[WorkoutSession]:
         if srows:
             trows = conn.execute(
                 """
-                SELECT t.session_id, t.exercise, t.set_no, t.weight_kg, t.reps
+                SELECT t.session_id, t.exercise, t.set_no, t.weight_kg, t.reps,
+                       t.skipped, t.skip_reason
                 FROM workout_sets t
                 JOIN workout_sessions s ON s.id = t.session_id
                 WHERE s.profile_id = ?
@@ -875,6 +889,8 @@ def _load_workout_sessions(pid: int) -> List[WorkoutSession]:
                         set_no=t["set_no"],
                         weight_kg=t["weight_kg"],
                         reps=t["reps"],
+                        skipped=bool(t["skipped"]),
+                        skip_reason=t["skip_reason"],
                     )
                 )
     return [
@@ -937,10 +953,10 @@ def workout_session_upsert(
         for s in body.sets:
             conn.execute(
                 """
-                INSERT INTO workout_sets (session_id, exercise, set_no, weight_kg, reps)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO workout_sets (session_id, exercise, set_no, weight_kg, reps, skipped, skip_reason)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (sid, s.exercise, s.set_no, s.weight_kg, s.reps),
+                (sid, s.exercise, s.set_no, s.weight_kg, s.reps, int(s.skipped), s.skip_reason),
             )
         conn.commit()
     return WorkoutSession(session_date=session_date, **body.model_dump())

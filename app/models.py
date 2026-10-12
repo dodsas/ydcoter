@@ -274,6 +274,8 @@ class WorkoutSet(BaseModel):
     set_no: int
     weight_kg: Optional[float] = None
     reps: Optional[int] = None
+    skipped: bool = False  # 수행 안 함 — 집계·증량 판정에서 제외
+    skip_reason: Optional[str] = None  # pain | no_machine | no_time
 
     model_config = {"extra": "forbid"}
 
@@ -283,6 +285,10 @@ class WorkoutSet(BaseModel):
             raise ValueError("exercise must not be empty")
         if not 1 <= self.set_no <= 10:
             raise ValueError("set_no must be 1..10")
+        if self.skip_reason is not None and self.skip_reason not in ("pain", "no_machine", "no_time"):
+            raise ValueError("skip_reason must be pain | no_machine | no_time")
+        if self.skip_reason is not None and not self.skipped:
+            raise ValueError("skip_reason requires skipped=true")
         return self
 
 
@@ -323,6 +329,8 @@ class WorkoutPlanExercise(BaseModel):
     progression_due: bool = False  # 지난 세션 3세트 모두 반복 상한 성공 → 증량 차례
     progression_from_kg: Optional[float] = None
     progression_to_kg: Optional[float] = None
+    sessions_since_increase: Optional[int] = None  # 마지막 증량 후 수행 세션 수 (정체 카운터)
+    volume_trend: Optional[str] = None  # 최근 3세션 볼륨(중량×반복 합) 추세: up | flat | down
     last_date: Optional[str] = None
     last_sets: List[WorkoutSet] = []
     note: Optional[str] = None
