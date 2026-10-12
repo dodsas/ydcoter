@@ -38,9 +38,10 @@ def _phase2(hinge: str) -> List[str]:
     return ["legpress", hinge, "chestpress", "latpulldown", "legcurl", "shoulderpress", "seatedrow"]
 
 
-# 머신 최소 단위 5kg → 증량 폭 전 종목 +5kg. 덤벨 RDL만 +2.5kg 가능.
+# 머신 최소 단위 5kg → 증량 폭 전 종목 +5kg.
+# 덤벨 RDL만 예외: 아령 하나당 2kg 단위 조절 → 기록(한 쪽 무게) 기준 +2kg.
 def _inc(ex: str) -> float:
-    return 2.5 if ex == "rdl" else 5.0
+    return 2.0 if ex == "rdl" else 5.0
 
 
 # 상체는 +5kg 점프(~17%)가 커서 반복 상한 15회로 완충.
@@ -189,7 +190,7 @@ def build_plan(slug: str, sessions: List[WorkoutSession]) -> WorkoutPlan:
             key="hinge_rdl",
             title="힙 힌지: 덤벨 RDL",
             period=f"{RDL_FROM_WEEK}주차~",
-            detail="가벼운 덤벨부터, 허리 중립 (+2.5kg 단위 증량 가능)",
+            detail="가벼운 덤벨부터, 허리 중립 (아령 하나당 2kg 단위 — 한 쪽 기준 +2kg 증량)",
             status="current" if hinge == "rdl" else _milestone_status(week, RDL_FROM_WEEK, None),
         ),
     ]
@@ -197,7 +198,7 @@ def build_plan(slug: str, sessions: List[WorkoutSession]) -> WorkoutPlan:
     rules = [
         "주 3회, 세션당 전 종목 3세트.",
         "2단계 증량 트리거: 3세트 모두 반복 상한(하체 12회 · 상체 15회) 성공 → +5kg(머신 한 칸) 올리고 8회부터 재시작.",
-        "덤벨 RDL만 +2.5kg 단위 증량 가능 (머신 제약 무관).",
+        "덤벨 RDL만 +2kg 단위 증량 (아령 하나당 2kg 조절 — 기록·증량 모두 한 쪽 무게 기준).",
         "허리 불편감 3/10 이상이 다음날에도 지속되면 마지막 올린 중량 롤백. 다리 저림·방사통·힘 빠짐 신규 발생 시 진료 대상.",
     ]
 

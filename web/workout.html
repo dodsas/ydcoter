@@ -447,7 +447,7 @@
       <h4><span class="tag">↑</span>점진적 과부하 (2단계의 핵심)</h4>
       <ul>
         <li><strong>3세트 모두 상한(하체 12회 · 상체 15회) 성공 → 다음 세션 +5kg, 8회부터</strong></li>
-        <li>머신 최소 단위가 <strong>5kg 한 칸</strong> — 상체는 15회까지 반복수로 완충 후 증량 (덤벨 RDL만 +2.5kg 가능)</li>
+        <li>머신 최소 단위가 <strong>5kg 한 칸</strong> — 상체는 15회까지 반복수로 완충 후 증량 (덤벨 RDL만 아령 하나당 <strong>+2kg</strong>, 한 쪽 무게 기준 기록)</li>
         <li>매 세션 직전 지난 기록 확인 → 최소 한 종목 갱신 시도</li>
         <li>기록 없는 세션은 없었던 세션입니다</li>
       </ul>
@@ -511,8 +511,8 @@ const PHASE2 = (hinge) => ["legpress", hinge, "chestpress", "latpulldown", "legc
 const COLS = ["legpress", "hinge", "chest", "lat", "legcurl", "shoulder", "row"]; // 테이블 열 순서 = 수행 순서
 // 헬스장 머신이 5kg 단위로만 조절됨 → 증량 폭은 전 종목 +5kg.
 // 상체는 +5kg 점프(~17%)가 커서 반복수 상한을 15회로 넓혀 완충한다.
-// 덤벨 RDL만 머신 제약과 무관하므로 +2.5kg 유지.
-const INC = (ex) => ex === "rdl" ? 2.5 : 5;
+// 덤벨 RDL만 예외: 아령 하나당 2kg 단위 조절 → 기록(한 쪽 무게) 기준 +2kg.
+const INC = (ex) => ex === "rdl" ? 2 : 5;
 const REP_MAX = (ex) => EXERCISES[ex].cat === "upper" ? 15 : 12;
 
 /* ───────────────────────── 저장소 (서버 DB) ─────────────── */
