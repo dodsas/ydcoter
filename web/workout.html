@@ -177,6 +177,17 @@
     padding: 1px 7px; margin-top: 5px;
   }
   .ex-sets { display: flex; gap: 10px; flex-wrap: wrap; }
+  .ex-skip-wrap { display: flex; align-items: center; gap: 5px; }
+  .ex-skip-wrap label { font-size: 11px; color: var(--muted); }
+  .ex-skip-wrap select {
+    background: var(--page); border: 1px solid var(--baseline); color: var(--ink-2);
+    font-family: var(--font-mono); font-size: 11.5px; padding: 5px 6px;
+  }
+  .ex-row.skipping .ex-sets .set-pair { opacity: .3; pointer-events: none; }
+  .skip-chip {
+    display: inline-block; font-family: var(--font-mono); font-size: 11px;
+    color: var(--muted); border: 1px dashed var(--muted); padding: 0 6px;
+  }
   .set-pair {
     display: flex; align-items: center; gap: 4px;
     background: var(--page); border: 1px solid var(--baseline); padding: 5px 8px;
@@ -217,7 +228,8 @@
   .chart-card { background: var(--surface-1); border: 1px solid var(--border); padding: 14px 14px 8px; }
   .chart-card h4 { font-size: 12px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.06em; }
   .chart-card h4 .cur { float: right; font-family: var(--font-mono); font-weight: 600; color: var(--ink); }
-  .chart-card svg { display: block; width: 100%; height: 150px; margin-top: 6px; cursor: crosshair; }
+  .chart-card svg { display: block; width: 100%; height: 225px; margin-top: 6px; cursor: crosshair; }
+  .chart-card .stall { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); font-weight: 400; margin-left: 6px; }
   .chart-card svg text { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); }
   .empty-note {
     color: var(--muted); font-size: 13px; padding: 26px;
@@ -381,7 +393,7 @@
     <div id="ex-list"></div>
 
     <div class="entry-foot">
-      <div class="hint" style="margin:0" id="entry-hint">중량 첫 칸 입력 시 빈 세트에 자동 복사됩니다 · 수행한 세트만 횟수를 채우세요</div>
+      <div class="hint" style="margin:0" id="entry-hint">중량 첫 칸 입력 시 빈 세트에 자동 복사됩니다 · 수행한 세트만 횟수를 채우세요 · 못 한 종목은 '건너뜀'에 사유 선택</div>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="ghost" id="btn-cancel-edit" style="display:none">수정 취소</button>
         <button id="btn-save">세션 저장</button>
@@ -391,7 +403,7 @@
   </div>
 
   <!-- 추세 -->
-  <div class="sec-label"><span class="n">03</span> 종목별 중량 추세 (최고 세트)</div>
+  <div class="sec-label"><span class="n">03</span> 종목별 추세 — 중량(최고 세트) · 볼륨(중량×반복 합)</div>
   <div class="charts" id="charts">
     <div class="empty-note" style="grid-column:1/-1">세션이 2회 이상 쌓이면 종목별 추세가 나타납니다</div>
   </div>
@@ -457,6 +469,8 @@
       <ul>
         <li>불편감 평소~+1·2 뻐근 → <strong>정상 진행</strong></li>
         <li><strong>+3 이상, 다음날 지속 → 마지막 올린 중량 롤백</strong></li>
+        <li>힙 힌지는 상한을 채워도 <strong>같은 중량 2주 유지 후 증량</strong> — 연속 +5kg가 허리 에피소드로 이어진 이력</li>
+        <li>레그프레스·힙 힌지는 <strong>같은 세션에서 동시 증량 금지</strong> — 허리 부하 종목은 한 번에 하나만</li>
         <li>다리 저림·방사통·힘 빠짐 신규 발생 → <strong>진료 대상</strong></li>
         <li>RDL: 햄스트링이 당기는 감각이 정답 — 허리로 느껴지면 중량↓ 가동범위 축소</li>
       </ul>
@@ -558,11 +572,11 @@ async function api(path, opts) {
 }
 const fromWire = (w) => ({
   date: w.session_date, phase: w.phase, discomfort: w.discomfort, note: w.note,
-  sets: (w.sets || []).map(s => ({ exercise: s.exercise, set_no: s.set_no, weight: s.weight_kg, reps: s.reps })),
+  sets: (w.sets || []).map(s => ({ exercise: s.exercise, set_no: s.set_no, weight: s.weight_kg, reps: s.reps, skipped: !!s.skipped, skipReason: s.skip_reason ?? null })),
 });
 const toWire = (s) => ({
   phase: s.phase, discomfort: s.discomfort, note: s.note,
-  sets: s.sets.map(t => ({ exercise: t.exercise, set_no: t.set_no, weight_kg: t.weight, reps: t.reps })),
+  sets: s.sets.map(t => ({ exercise: t.exercise, set_no: t.set_no, weight_kg: t.weight, reps: t.reps, skipped: !!t.skipped, skip_reason: t.skipReason ?? null })),
 });
 async function reloadSessions() {
   sessions = (await api(`/workout/sessions${Q()}`)).map(fromWire);
@@ -593,9 +607,15 @@ async function initProfileSwitcher(onSwitch) {
 const $ = id => document.getElementById(id);
 let editingDate = null;
 
+/* 수행한 세트만 — 건너뜀(skipped)·0회(시도만 하고 못 든 기록)는 집계·증량 판정 제외 */
 function exSets(session, ex) {
+  return session.sets.filter(t => t.exercise === ex && !t.skipped && t.reps !== 0).sort((a, b) => a.set_no - b.set_no);
+}
+/* 건너뜀 포함 원본 세트 — 수정 모드 프리필·표의 '제외' 표시용 */
+function exSetsAll(session, ex) {
   return session.sets.filter(t => t.exercise === ex).sort((a, b) => a.set_no - b.set_no);
 }
+const SKIP_REASONS = { pain: "통증", no_machine: "자리없음", no_time: "시간부족" };
 /* ex를 수행한 가장 최근 세션 (excludeDate 제외) */
 function lastSessionWith(ex, excludeDate) {
   for (let i = sessions.length - 1; i >= 0; i--) {
@@ -624,13 +644,52 @@ function hitRepTop(sets, ex) {
   const done = sets.filter(t => t.reps != null);
   return done.length >= 3 && done.every(t => t.reps >= REP_MAX(ex));
 }
+// 허리 리스크 종목(힙 힌지)은 반복 상한을 채워도 같은 중량 2주 유지 후 증량 —
+// 백 익스텐션 10→15→20kg 연속 +5kg가 허리 에피소드로 이어진 이력의 안전장치.
+const HINGES = ["backext", "rdl"];
+const HINGE_HOLD_DAYS = 14;
+const daysBetween = (a, b) => (new Date(b + "T00:00:00") - new Date(a + "T00:00:00")) / 86400000;
+/* 종목별 세션 시계열 (날짜·최고 세트·볼륨=Σ중량×반복) — 수행 세트 기준 */
+function weightHistory(ex, excludeDate) {
+  return sessions
+    .filter(s => s.date !== excludeDate)
+    .map(s => {
+      const sets = exSets(s, ex);
+      const t = bestSet(sets);
+      return t && t.weight != null
+        ? { date: s.date, w: t.weight, reps: t.reps, vol: sets.reduce((a, x) => a + (x.weight ?? 0) * (x.reps ?? 0), 0) }
+        : null;
+    })
+    .filter(Boolean);
+}
+/* 힙 힌지 2주 유지 — 현재 중량을 처음 든 날로부터 asOfDate까지 14일 미만이면 증량 보류 */
+function hingeHoldActive(ex, weight, asOfDate, excludeDate) {
+  if (!HINGES.includes(ex)) return false;
+  const first = weightHistory(ex, excludeDate).find(h => h.w >= weight);
+  return !!first && daysBetween(first.date, asOfDate) < HINGE_HOLD_DAYS;
+}
+/* 정체 카운터: 마지막 증량 후 수행 세션 수 + 최근 3세션 볼륨 추세 */
+function stallStats(ex) {
+  const hist = weightHistory(ex, null);
+  if (!hist.length) return null;
+  let since = 0;
+  for (let i = hist.length - 1; i > 0; i--) { if (hist[i].w > hist[i - 1].w) break; since++; }
+  let trend = null;
+  if (hist.length >= 2) {
+    const vols = hist.slice(-3).map(h => h.vol);
+    const ch = (vols[vols.length - 1] - vols[0]) / (vols[0] || 1);
+    trend = ch > 0.05 ? "up" : ch < -0.05 ? "down" : "flat";
+  }
+  return { since, trend };
+}
 function progressionFor(ex, excludeDate) {
   const last = lastSessionWith(ex, excludeDate);
   if (!last) return null;
   const sets = exSets(last, ex);
   if (last.phase === 2 && hitRepTop(sets, ex)) {
     const top = bestSet(sets);
-    if (top && top.weight != null) return { from: top.weight, to: top.weight + INC(ex) };
+    if (top && top.weight != null && !hingeHoldActive(ex, top.weight, last.date, excludeDate))
+      return { from: top.weight, to: top.weight + INC(ex) };
   }
   return null;
 }
@@ -678,11 +737,11 @@ function buildForm(prefill) {
     const prog = phase === 2 ? progressionFor(ex, editingDate) : null;
     const note = (phase === 1 ? meta.note1 : meta.note2) || meta.note1 || "";
 
-    // 미리 채울 값: 수정 모드면 그 세션 값, 아니면 지난 세션 중량(증량 트리거 시 인상값)
+    // 미리 채울 값: 수정 모드면 그 세션 값(건너뜀 포함), 아니면 지난 세션 중량(증량 트리거 시 인상값)
     const pre = [];
     for (let i = 1; i <= 3; i++) {
       if (prefill) {
-        const t = exSets(prefill, ex).find(t => t.set_no === i);
+        const t = exSetsAll(prefill, ex).find(t => t.set_no === i);
         pre.push({ w: t?.weight ?? "", r: t?.reps ?? "" });
       } else if (prog) {
         pre.push({ w: prog.to, r: "" });
@@ -692,6 +751,7 @@ function buildForm(prefill) {
       }
     }
     const repsPH = phase === 1 ? "10" : (prog ? "8" : `8~${REP_MAX(ex)}`);
+    const preSkip = prefill ? (exSetsAll(prefill, ex).find(t => t.skipped)?.skipReason ?? "") : "";
 
     const row = document.createElement("div");
     row.className = "ex-row";
@@ -710,8 +770,17 @@ function buildForm(prefill) {
             <span class="x">×</span>
             <input class="r" type="number" step="1" min="0" data-set="${i + 1}" data-kind="r" value="${pre[i].r}" placeholder="${repsPH}">
           </div>`).join("")}
+        <div class="ex-skip-wrap"><label>건너뜀</label>
+          <select class="skip-sel">
+            <option value="">—</option>
+            ${Object.entries(SKIP_REASONS).map(([k, v]) => `<option value="${k}" ${preSkip === k ? "selected" : ""}>${v}</option>`).join("")}
+          </select>
+        </div>
       </div>`;
     box.appendChild(row);
+    const skipSel = row.querySelector(".skip-sel");
+    row.classList.toggle("skipping", !!skipSel.value);
+    skipSel.addEventListener("change", () => row.classList.toggle("skipping", !!skipSel.value));
     // 1세트 중량 입력 → 2·3세트 자동 따라가기.
     // 2·3세트를 직접 수정하기 전까지는 1세트를 계속 따라가고,
     // 직접 수정한 세트는 독립 (비우면 다시 따라감).
@@ -735,6 +804,12 @@ function collectForm() {
   const sets = [];
   document.querySelectorAll("#ex-list .ex-row").forEach(row => {
     const ex = row.dataset.ex;
+    const skipReason = row.querySelector(".skip-sel").value;
+    if (skipReason) {
+      // 건너뛴 종목: 사유만 기록 — "이 종목 왜 비었지"를 쿼리 가능하게
+      sets.push({ exercise: ex, set_no: 1, weight: null, reps: null, skipped: true, skipReason });
+      return;
+    }
     for (let i = 1; i <= 3; i++) {
       const w = row.querySelector(`input[data-kind="w"][data-set="${i}"]`).value;
       const r = row.querySelector(`input[data-kind="r"][data-set="${i}"]`).value;
@@ -743,6 +818,7 @@ function collectForm() {
         exercise: ex, set_no: i,
         weight: w === "" ? null : parseFloat(w),
         reps: r === "" ? null : parseInt(r, 10),
+        skipped: false, skipReason: null,
       });
     }
   });
@@ -799,12 +875,41 @@ $("in-phase").addEventListener("change", () => buildForm(editingDate ? sessions.
 $("in-hinge").addEventListener("change", () => buildForm(editingDate ? sessions.find(s => s.date === editingDate) : null));
 $("btn-cancel-edit").addEventListener("click", cancelEdit);
 
+/* 저장 전 허리 안전 체크 — 증량 폭 초과 · 힌지 2주 유지 · 허리 종목 동시 증량 */
+function safetyWarnings(s) {
+  const warnings = [];
+  const increased = {}; // ex → {from, to}
+  [...new Set(s.sets.filter(t => !t.skipped).map(t => t.exercise))].forEach(ex => {
+    const newMax = Math.max(...s.sets.filter(t => t.exercise === ex && !t.skipped && t.weight != null).map(t => t.weight), -Infinity);
+    if (newMax === -Infinity) return;
+    const hist = weightHistory(ex, editingDate).filter(h => h.date < s.date);
+    if (!hist.length) return;
+    const prev = hist[hist.length - 1];
+    if (newMax <= prev.w) return;
+    increased[ex] = { from: prev.w, to: newMax };
+    if (newMax > prev.w + INC(ex) + 1e-9)
+      warnings.push(`· ${EXERCISES[ex].name}: ${fmtW(prev.w)}→${fmtW(newMax)}kg — 증량 폭 한 칸(+${INC(ex)}kg)을 초과합니다.`);
+    if (HINGES.includes(ex)) {
+      const first = hist.find(h => h.w >= prev.w);
+      if (first && daysBetween(first.date, s.date) < HINGE_HOLD_DAYS)
+        warnings.push(`· ${EXERCISES[ex].name}: ${fmtW(prev.w)}kg를 ${first.date}부터 2주 미만 유지 — 힌지는 같은 중량 2주 유지 후 증량입니다.`);
+    }
+  });
+  if (increased.legpress && HINGES.some(h => increased[h]))
+    warnings.push("· 레그프레스와 힙 힌지를 같은 세션에서 동시 증량 — 허리 부하 종목은 한 번에 하나만 올리세요.");
+  return warnings;
+}
+
 $("btn-save").addEventListener("click", async () => {
   const s = collectForm();
   if (!s.date) return alert("날짜를 입력하세요.");
   if (!s.sets.length) return alert("기록된 세트가 없습니다 — 기록 없는 세션은 없었던 세션입니다.");
-  const incomplete = s.sets.filter(t => t.weight == null || t.reps == null);
-  if (incomplete.length && !confirm(`중량 또는 횟수가 비어 있는 세트가 ${incomplete.length}개 있습니다. 그대로 저장할까요?`)) return;
+  if (s.discomfort == null) return alert("허리 불편감을 기록하세요 — 롤백 판단의 기준값입니다.");
+  const incomplete = s.sets.filter(t => !t.skipped && (t.weight == null || t.reps == null));
+  if (incomplete.length)
+    return alert(`중량 또는 횟수가 비어 있는 세트가 ${incomplete.length}개 있습니다.\n횟수까지 채우거나, 세트를 비우거나, 종목을 '건너뜀' 처리하세요.`);
+  const warns = safetyWarnings(s);
+  if (warns.length && !confirm(`⚠ 허리 안전 체크\n\n${warns.join("\n")}\n\n그대로 저장할까요?`)) return;
   const existing = sessions.find(x => x.date === s.date && x.date !== editingDate);
   if (existing && !confirm(`${s.date} 세션이 이미 있습니다. 덮어쓸까요?`)) return;
   try {
@@ -908,7 +1013,10 @@ function renderTable() {
       const ex = [...new Set(s.sets.map(t => t.exercise))].find(e => EXERCISES[e]?.col === col);
       if (!ex) return "<td>–</td>";
       const top = bestSet(exSets(s, ex));
-      if (!top) return "<td>–</td>";
+      if (!top) {
+        const sk = exSetsAll(s, ex).find(t => t.skipped);
+        return sk ? `<td><span class="skip-chip">제외${sk.skipReason ? "·" + SKIP_REASONS[sk.skipReason] : ""}</span></td>` : "<td>–</td>";
+      }
       let dl = "";
       const prev = lastSessionWith(ex, s.date);
       // 표는 시간순이므로 "직전"은 s보다 이전 세션만
@@ -954,8 +1062,7 @@ const tooltip = $("tooltip");
 function renderCharts() {
   const box = $("charts");
   const order = ["legpress", "backext", "rdl", "chestpress", "latpulldown", "legcurl", "shoulderpress", "seatedrow"];
-  const usable = order.filter(ex =>
-    sessions.filter(s => { const t = bestSet(exSets(s, ex)); return t && t.weight != null; }).length >= 2);
+  const usable = order.filter(ex => weightHistory(ex, null).length >= 2);
   if (!usable.length) {
     box.innerHTML = `<div class="empty-note" style="grid-column:1/-1">세션이 2회 이상 쌓이면 종목별 추세가 나타납니다</div>`;
     return;
@@ -964,44 +1071,62 @@ function renderCharts() {
   usable.forEach(ex => box.appendChild(chartCard(ex)));
 }
 function chartCard(ex) {
-  const pts = sessions
-    .map(s => { const t = bestSet(exSets(s, ex)); return t && t.weight != null ? { date: s.date, v: t.weight, reps: t.reps } : null; })
-    .filter(Boolean);
-  const W = 320, H = 150, PAD = { t: 10, r: 14, b: 22, l: 40 };
-  const iw = W - PAD.l - PAD.r, ih = H - PAD.t - PAD.b;
-  let min = Math.min(...pts.map(p => p.v)), max = Math.max(...pts.map(p => p.v));
-  const span = Math.max(max - min, 2);
-  min -= span * 0.18; max += span * 0.18;
+  const pts = weightHistory(ex, null);
+  // 중량(최고 세트)과 볼륨(Σ중량×반복)은 축척이 달라 한 플롯에 겹치지 않고
+  // (이중 축 금지) x축을 공유하는 상·하 두 패널로 나눈다.
+  const W = 320, H = 225, PAD = { t: 10, r: 14, b: 22, l: 40 };
+  const iw = W - PAD.l - PAD.r;
+  const ihW = 112;                       // 상단: 중량 패널
+  const vTop = PAD.t + ihW + 30, ihV = H - vTop - PAD.b; // 하단: 볼륨 패널
   const x = i => PAD.l + (pts.length === 1 ? iw / 2 : i / (pts.length - 1) * iw);
-  const y = v => PAD.t + (1 - (v - min) / (max - min)) * ih;
+  const scale = (vals, top, ih, padRatio) => {
+    let min = Math.min(...vals), max = Math.max(...vals);
+    const span = Math.max(max - min, 2);
+    min -= span * padRatio; max += span * padRatio;
+    return v => top + (1 - (v - min) / (max - min)) * ih;
+  };
+  const yW = scale(pts.map(p => p.w), PAD.t, ihW, 0.18);
+  const yV = scale(pts.map(p => p.vol), vTop, ihV, 0.22);
 
-  const last = pts[pts.length - 1].v, delta = last - pts[0].v;
+  const last = pts[pts.length - 1], delta = last.w - pts[0].w;
+  const st = stallStats(ex);
+  const TREND = { up: ["↗", "var(--delta-up)"], flat: ["→", "var(--muted)"], down: ["↘", "var(--serious)"] };
+  const stall = st && st.trend
+    ? `<span class="stall">증량 후 ${st.since}세션 · 볼륨 <span style="color:${TREND[st.trend][1]}">${TREND[st.trend][0]}</span></span>`
+    : "";
+
+  const linePath = (yFn, key) => pts.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${yFn(p[key]).toFixed(1)}`).join("");
+  const wPath = linePath(yW, "w"), vPath = linePath(yV, "vol");
+  const wArea = wPath + `L${x(pts.length - 1).toFixed(1)},${PAD.t + ihW}L${x(0).toFixed(1)},${PAD.t + ihW}Z`;
+  const dots = pts.map((p, i) =>
+    `<circle cx="${x(i).toFixed(1)}" cy="${yW(p.w).toFixed(1)}" r="4" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"/>`).join("");
   let grid = "";
   for (let g = 0; g < 3; g++) {
-    const gv = min + (max - min) * (0.15 + g * 0.35);
-    grid += `<line x1="${PAD.l}" x2="${W - PAD.r}" y1="${y(gv)}" y2="${y(gv)}" stroke="var(--grid)" stroke-width="1"/>
-             <text x="${PAD.l - 6}" y="${y(gv) + 3}" text-anchor="end">${gv.toFixed(1)}</text>`;
+    const t = 0.15 + g * 0.35;
+    const wv = Math.min(...pts.map(p => p.w)) + (Math.max(...pts.map(p => p.w)) - Math.min(...pts.map(p => p.w))) * t;
+    grid += `<line x1="${PAD.l}" x2="${W - PAD.r}" y1="${yW(wv)}" y2="${yW(wv)}" stroke="var(--grid)" stroke-width="1"/>
+             <text x="${PAD.l - 6}" y="${yW(wv) + 3}" text-anchor="end">${wv.toFixed(1)}</text>`;
   }
-  const path = pts.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join("");
-  const area = path + `L${x(pts.length - 1).toFixed(1)},${y(min)}L${x(0).toFixed(1)},${y(min)}Z`;
-  const dots = pts.map((p, i) =>
-    `<circle cx="${x(i).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="4" fill="var(--series-2)" stroke="var(--surface-1)" stroke-width="2"/>`).join("");
   const xl = d => d.slice(2).replace(/-/g, ".");
   const xLabels = `<text x="${x(0)}" y="${H - 6}" text-anchor="start">${xl(pts[0].date)}</text>
                    <text x="${x(pts.length - 1)}" y="${H - 6}" text-anchor="end">${xl(pts[pts.length - 1].date)}</text>`;
-  const lastLabel = `<text x="${x(pts.length - 1) - 8}" y="${y(last) - 9}" text-anchor="end" style="fill:var(--ink-2);font-weight:600">${fmtW(last)}</text>`;
+  const lastLabel = `<text x="${x(pts.length - 1) - 8}" y="${yW(last.w) - 9}" text-anchor="end" style="fill:var(--ink-2);font-weight:600">${fmtW(last.w)}</text>`;
+  const volLabels = `<text x="${PAD.l}" y="${vTop - 7}" text-anchor="start" style="fill:var(--muted)">볼륨 kg·회</text>
+                     <text x="${x(pts.length - 1) - 8}" y="${yV(last.vol) - 7}" text-anchor="end" style="fill:var(--ink-2)">${Math.round(last.vol)}</text>`;
 
   const card = document.createElement("div");
   card.className = "chart-card";
   card.innerHTML = `<h4>${EXERCISES[ex].name} <span style="color:var(--muted);font-weight:400">kg</span>
-      <span class="cur"><span style="font-size:11px;color:${delta > 0 ? "var(--delta-up)" : delta < 0 ? "var(--serious)" : "var(--muted)"}">${delta > 0 ? "+" : ""}${fmtW(delta)}</span></span></h4>
+      <span class="cur"><span style="font-size:11px;color:${delta > 0 ? "var(--delta-up)" : delta < 0 ? "var(--serious)" : "var(--muted)"}">${delta > 0 ? "+" : ""}${fmtW(delta)}</span></span>${stall}</h4>
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
       ${grid}
-      <line x1="${PAD.l}" x2="${W - PAD.r}" y1="${PAD.t + ih}" y2="${PAD.t + ih}" stroke="var(--baseline)" stroke-width="1"/>
-      <path d="${area}" fill="var(--series-2)" opacity="0.08"/>
-      <path d="${path}" fill="none" stroke="var(--series-2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-      <line class="xhair" x1="0" x2="0" y1="${PAD.t}" y2="${PAD.t + ih}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
-      ${dots}${lastLabel}${xLabels}
+      <line x1="${PAD.l}" x2="${W - PAD.r}" y1="${PAD.t + ihW}" y2="${PAD.t + ihW}" stroke="var(--baseline)" stroke-width="1"/>
+      <path d="${wArea}" fill="var(--series-2)" opacity="0.08"/>
+      <path d="${wPath}" fill="none" stroke="var(--series-2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <line x1="${PAD.l}" x2="${W - PAD.r}" y1="${vTop + ihV}" y2="${vTop + ihV}" stroke="var(--baseline)" stroke-width="1"/>
+      <path d="${vPath}" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <line class="xhair" x1="0" x2="0" y1="${PAD.t}" y2="${vTop + ihV}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
+      ${dots}${lastLabel}${volLabels}${xLabels}
     </svg>`;
   const svg = card.querySelector("svg");
   const xhair = svg.querySelector(".xhair");
@@ -1012,7 +1137,7 @@ function chartCard(ex) {
     pts.forEach((p, i) => { const d = Math.abs(x(i) - mx); if (d < bd) { bd = d; bi = i; } });
     xhair.setAttribute("x1", x(bi)); xhair.setAttribute("x2", x(bi)); xhair.setAttribute("opacity", "1");
     const p = pts[bi];
-    tooltip.innerHTML = `<div class="tt-date">${p.date}</div>${EXERCISES[ex].name} <strong>${fmtW(p.v)}kg × ${p.reps ?? "–"}</strong>`;
+    tooltip.innerHTML = `<div class="tt-date">${p.date}</div>${EXERCISES[ex].name} <strong>${fmtW(p.w)}kg × ${p.reps ?? "–"}</strong> · 볼륨 ${Math.round(p.vol)}`;
     tooltip.style.display = "block";
     const tw = tooltip.offsetWidth;
     tooltip.style.left = Math.min(e.clientX + 14, window.innerWidth - tw - 8) + "px";
