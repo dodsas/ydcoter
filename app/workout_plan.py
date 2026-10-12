@@ -44,9 +44,11 @@ def _inc(ex: str) -> float:
     return 2.0 if ex == "rdl" else 5.0
 
 
-# 상체는 +5kg 점프(~17%)가 커서 반복 상한 15회로 완충.
+# 반복 상한 = 조절 단위 기준: 머신(+5kg 한 칸, 점프 9~14%)은 15회까지 볼륨으로
+# 완충 — 특히 레그프레스는 허리 부담상 중량보다 볼륨 우선. 덤벨 RDL만
+# +2kg 미세 조절이 가능해 완충 불필요 → 12회.
 def _rep_max(ex: str) -> int:
-    return 15 if EXERCISES[ex]["cat"] == "upper" else 12
+    return 12 if ex == "rdl" else 15
 
 
 def _guide_url(ex: str) -> str:
@@ -176,7 +178,7 @@ def build_plan(slug: str, sessions: List[WorkoutSession]) -> WorkoutPlan:
             key="phase2",
             title="2단계 — 7종 전신",
             period="3주차~약 3개월",
-            detail="하체 3×8~12 · 상체 3×8~15, 힙 힌지 추가",
+            detail="머신 3×8~15 · 덤벨 RDL 3×8~12, 힙 힌지 추가",
             status="current" if phase == 2 else "upcoming",
         ),
         WorkoutPlanMilestone(
@@ -197,7 +199,8 @@ def build_plan(slug: str, sessions: List[WorkoutSession]) -> WorkoutPlan:
 
     rules = [
         "주 3회, 세션당 전 종목 3세트.",
-        "2단계 증량 트리거: 3세트 모두 반복 상한(하체 12회 · 상체 15회) 성공 → +5kg(머신 한 칸) 올리고 8회부터 재시작.",
+        "2단계 증량 트리거: 3세트 모두 반복 상한(머신 15회 · 덤벨 RDL 12회) 성공 → 한 칸 올리고 8회부터 재시작.",
+        "머신은 15회까지 볼륨으로 완충 후 +5kg — 특히 레그프레스는 허리 부담상 중량보다 반복수 우선.",
         "덤벨 RDL만 +2kg 단위 증량 (아령 하나당 2kg 조절 — 기록·증량 모두 한 쪽 무게 기준).",
         "허리 불편감 3/10 이상이 다음날에도 지속되면 마지막 올린 중량 롤백. 다리 저림·방사통·힘 빠짐 신규 발생 시 진료 대상.",
     ]
