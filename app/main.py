@@ -26,6 +26,7 @@ from app.database import (
     get_local_conn,
     init_body_schema,
     init_health_schema,
+    init_notes_schema,
     init_nutrition_schema,
     using_turso,
 )
@@ -33,8 +34,13 @@ from app.models import (
     BodyRecord,
     BodyRecordIn,
     DailyNutrition,
+    HealthNote,
+    HealthNoteIn,
     HealthRecordItem,
     HealthRecords,
+    NOTE_CATEGORIES,
+    NOTE_CATEGORY_LABELS,
+    NotesContext,
     InbodyRecord,
     InbodyRecordCreate,
     InbodyRecordIn,
@@ -92,11 +98,14 @@ def _ensure_schema() -> None:
             if not using_turso():
                 init_nutrition_schema(conn)
                 init_body_schema(conn)
+                init_notes_schema(conn)
     elif not using_turso():
-        # Existing local DB in dev-fallback: body_records may not exist yet
-        # (feature added after the DB was created) — idempotent, cheap.
+        # Existing local DB in dev-fallback: body_records / health_notes may
+        # not exist yet (features added after the DB was created) —
+        # idempotent, cheap.
         with get_local_conn() as conn:
             init_body_schema(conn)
+            init_notes_schema(conn)
 
     # Turso: idempotent — `CREATE TABLE IF NOT EXISTS` is cheap and keeps
     # the prod schema in sync with whatever ships in sql/schema-*.sql.
@@ -104,6 +113,7 @@ def _ensure_schema() -> None:
         with get_conn() as conn:
             init_nutrition_schema(conn)
             init_body_schema(conn)
+            init_notes_schema(conn)
 
     # 기존 DB 마이그레이션: CREATE IF NOT EXISTS 는 이미 있는 테이블에
     # 새 컬럼을 추가하지 못하므로 ALTER 를 따로 시도한다 (있으면 무시).
@@ -986,6 +996,213 @@ def workout_session_delete(
 
 
 # ===========================================================================
+# Health notes (/notes page) — RAG-ready personal health facts
+# ===========================================================================
+
+
+def _note_from_row(r) -> HealthNote:
+    return HealthNote(
+        id=r["id"],
+        category=r["category"],
+        title=r["title"],
+        content=r["content"],
+        tags=r["tags"],
+        pinned=bool(r["pinned"]),
+        archived=bool(r["archived"]),
+        updated_at=r["updated_at"],
+    )
+
+
+def _notes_where(pid: int, category: Optional[str], q: Optional[str], include_archived: bool):
+    """Shared WHERE builder for /notes/records and /notes/context."""
+    sql = "WHERE profile_id = ?"
+    params: list = [pid]
+    if not include_archived:
+        sql += " AND archived = 0"
+    if category:
+        if category not in NOTE_CATEGORIES:
+            raise HTTPException(422, f"category must be one of {', '.join(NOTE_CATEGORIES)}")
+        sql += " AND category = ?"
+        params.append(category)
+    if q:
+        sql += " AND (title LIKE ? OR content LIKE ? OR tags LIKE ?)"
+        like = f"%{q}%"
+        params += [like, like, like]
+    return sql, params
+
+
+@app.get("/notes/records", response_model=List[HealthNote])
+def notes_list(
+    profile: Optional[str] = _profile_query(),
+    category: Optional[str] = Query(None, description="카테고리 필터"),
+    q: Optional[str] = Query(None, description="제목/내용/태그 부분 검색"),
+    include_archived: bool = Query(False, description="보관된 노트 포함"),
+) -> List[HealthNote]:
+    """건강 노트 목록 — 고정(pinned) 먼저, 이후 최근 수정순."""
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
+    where, params = _notes_where(pid, category, q, include_archived)
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT id, category, title, content, tags, pinned, archived, updated_at
+            FROM health_notes
+            {where}
+            ORDER BY archived, pinned DESC, updated_at DESC, id DESC
+            """,
+            params,
+        ).fetchall()
+    return [_note_from_row(r) for r in rows]
+
+
+@app.get("/notes/context", response_model=NotesContext)
+def notes_context(
+    profile: Optional[str] = _profile_query(),
+    category: Optional[str] = Query(None, description="카테고리 필터"),
+    q: Optional[str] = Query(None, description="제목/내용/태그 부분 검색"),
+) -> NotesContext:
+    """노트를 LLM 프롬프트에 바로 주입 가능한 RAG 컨텍스트 텍스트로 변환.
+
+    보관(archived) 노트는 제외. 카테고리별로 묶고 고정 노트는 ★ 로 표시해
+    각 그룹 상단에 둔다. 프로필 기본 정보(성별·출생연도·신장)를 헤더로
+    포함해 이 텍스트 하나만으로 자기완결되도록 한다.
+    """
+    with get_local_conn() as lconn:
+        pid, slug = _resolve_profile(lconn, profile)
+        prow = lconn.execute(
+            "SELECT display_name, sex, birth_year, height_cm FROM profiles WHERE id = ?",
+            (pid,),
+        ).fetchone()
+    where, params = _notes_where(pid, category, q, include_archived=False)
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT id, category, title, content, tags, pinned, archived, updated_at
+            FROM health_notes
+            {where}
+            ORDER BY pinned DESC, updated_at DESC, id DESC
+            """,
+            params,
+        ).fetchall()
+
+    generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    # profiles.sex 는 'm'/'f'(body_records 계열)와 'male'/'female'(시드 데이터)
+    # 두 표기가 섞여 있다 — 둘 다 한글로 정규화.
+    _SEX_KO = {"m": "남성", "f": "여성", "male": "남성", "female": "여성"}
+    sex_label = _SEX_KO.get(prow["sex"], prow["sex"]) if prow["sex"] else None
+    bits = [b for b in (
+        sex_label,
+        f"{prow['birth_year']}년생" if prow["birth_year"] else None,
+        f"{prow['height_cm']:g}cm" if prow["height_cm"] else None,
+    ) if b]
+    lines = [f"[건강 노트 — {prow['display_name']}" + (f" · {' · '.join(bits)}" if bits else "") + "]"]
+
+    by_cat: dict[str, list] = {}
+    for r in rows:
+        by_cat.setdefault(r["category"], []).append(r)
+    for cat in NOTE_CATEGORIES:
+        if cat not in by_cat:
+            continue
+        lines.append("")
+        lines.append(f"## {NOTE_CATEGORY_LABELS[cat]}")
+        for r in by_cat[cat]:
+            tags = ""
+            if r["tags"]:
+                tags = " " + " ".join(
+                    f"#{t.strip()}" for t in r["tags"].split(",") if t.strip()
+                )
+            star = "★ " if r["pinned"] else ""
+            lines.append(f"- {star}{r['title']}: {r['content']}{tags}")
+
+    return NotesContext(
+        profile_slug=slug,
+        generated_at=generated_at,
+        note_count=len(rows),
+        text="\n".join(lines),
+    )
+
+
+@app.post("/notes/records", response_model=HealthNote)
+def note_create(
+    body: HealthNoteIn,
+    profile: Optional[str] = _profile_query(),
+) -> HealthNote:
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
+    with get_conn() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO health_notes (profile_id, category, title, content, tags, pinned, archived)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (pid, body.category, body.title.strip(), body.content.strip(),
+             body.tags, int(body.pinned), int(body.archived)),
+        )
+        note_id = cur.lastrowid
+        conn.commit()
+        row = conn.execute(
+            """
+            SELECT id, category, title, content, tags, pinned, archived, updated_at
+            FROM health_notes WHERE id = ?
+            """,
+            (note_id,),
+        ).fetchone()
+    return _note_from_row(row)
+
+
+@app.put("/notes/records/{note_id}", response_model=HealthNote)
+def note_update(
+    note_id: int,
+    body: HealthNoteIn,
+    profile: Optional[str] = _profile_query(),
+) -> HealthNote:
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
+    with get_conn() as conn:
+        owned = conn.execute(
+            "SELECT id FROM health_notes WHERE id = ? AND profile_id = ?",
+            (note_id, pid),
+        ).fetchone()
+        if not owned:
+            raise HTTPException(404, f"note {note_id} not found")
+        conn.execute(
+            """
+            UPDATE health_notes
+            SET category = ?, title = ?, content = ?, tags = ?,
+                pinned = ?, archived = ?, updated_at = datetime('now')
+            WHERE id = ?
+            """,
+            (body.category, body.title.strip(), body.content.strip(),
+             body.tags, int(body.pinned), int(body.archived), note_id),
+        )
+        conn.commit()
+        row = conn.execute(
+            """
+            SELECT id, category, title, content, tags, pinned, archived, updated_at
+            FROM health_notes WHERE id = ?
+            """,
+            (note_id,),
+        ).fetchone()
+    return _note_from_row(row)
+
+
+@app.delete("/notes/records/{note_id}")
+def note_delete(
+    note_id: int,
+    profile: Optional[str] = _profile_query(),
+) -> dict:
+    with get_local_conn() as lconn:
+        pid = _resolve_profile_id(lconn, profile)
+    with get_conn() as conn:
+        conn.execute(
+            "DELETE FROM health_notes WHERE id = ? AND profile_id = ?",
+            (note_id, pid),
+        )
+        conn.commit()
+    return {"ok": True, "id": note_id}
+
+
+# ===========================================================================
 # Dashboard — aggregated recent health records
 # ===========================================================================
 
@@ -1172,3 +1389,8 @@ def workout_page() -> HTMLResponse:
 @app.get("/inbody", include_in_schema=False)
 def inbody_page() -> HTMLResponse:
     return _render_html("inbody.html")
+
+
+@app.get("/notes", include_in_schema=False)
+def notes_page() -> HTMLResponse:
+    return _render_html("notes.html")

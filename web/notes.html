@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d0d0d">
+<title>HEALTH NOTES — 건강 특이사항 · RAG</title>
+<link rel="icon" type="image/svg+xml" href="/assets/doctor.svg?v={{V}}" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ─── 팔레트 (검증된 다크 스텝 — 사이트 공통) ──────────────── */
+  :root {
+    color-scheme: dark;
+    --page:        #0d0d0d;
+    --surface-1:   #1a1a19;
+    --surface-2:   #222220;
+    --ink:         #ffffff;
+    --ink-2:       #c3c2b7;
+    --muted:       #898781;
+    --grid:        #2c2c2a;
+    --baseline:    #383835;
+    --border:      rgba(255,255,255,0.10);
+    --series-1:    #3987e5;  /* blue  — 주 액센트 */
+    --series-2:    #d95926;  /* orange — 보조 */
+    --good:        #0ca30c;
+    --warning:     #fab219;
+    --serious:     #ec835a;
+    --critical:    #d03b3b;
+    --teal:        #2ab3a6;
+
+    --font-display: 'Anton', 'IBM Plex Sans KR', sans-serif;
+    --font-body:    'IBM Plex Sans KR', 'Apple SD Gothic Neo', sans-serif;
+    --font-mono:    'IBM Plex Mono', 'SF Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.6;
+    /* 은은한 차트지 그리드 텍스처 */
+    background-image:
+      linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+    background-size: 48px 48px;
+    min-height: 100vh;
+  }
+
+  .wrap { max-width: 1060px; margin: 0 auto; padding: calc(40px + env(safe-area-inset-top)) 24px 80px; }
+
+  /* ─── 헤더 ─────────────────────────────────────────────── */
+  header {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    flex-wrap: wrap; gap: 16px;
+    border-bottom: 3px solid var(--ink);
+    padding-bottom: 18px; margin-bottom: 28px;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-size: clamp(40px, 7vw, 64px);
+    line-height: 0.95; letter-spacing: 0.01em;
+    text-transform: uppercase;
+  }
+  h1 .accent { color: var(--series-1); }
+  .header-meta {
+    text-align: right; color: var(--muted); font-size: 12px;
+    font-family: var(--font-mono);
+  }
+  .header-meta strong { color: var(--ink-2); font-weight: 500; }
+  .page-nav { margin-top: 8px; display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+  .page-nav a {
+    display: inline-block; padding: 5px 11px; text-decoration: none;
+    border: 1px solid var(--baseline); color: var(--ink-2);
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em;
+  }
+  .page-nav a:hover { border-color: var(--muted); color: var(--ink); }
+  .profile-mini {
+    background: var(--surface-2); color: var(--ink);
+    border: 1px solid var(--baseline); border-radius: 0;
+    font-family: var(--font-mono); font-size: 11px; padding: 2px 6px;
+  }
+  .profile-mini:focus { outline: none; border-color: var(--series-1); }
+
+  /* ─── 섹션 라벨 ─────────────────────────────────────────── */
+  .sec-label {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--muted);
+    display: flex; align-items: center; gap: 10px;
+    margin: 36px 0 14px;
+  }
+  .sec-label::before { content: ""; width: 22px; height: 2px; background: var(--series-1); }
+  .sec-label .n { color: var(--series-1); }
+
+  /* ─── 입력 폼 ──────────────────────────────────────────── */
+  .entry {
+    background: var(--surface-1); border: 1px solid var(--border);
+    padding: 22px; transition: border-color .2s;
+  }
+  .entry.editing { border-color: var(--series-1); }
+  .edit-badge {
+    display: none; font-family: var(--font-mono); font-size: 11px;
+    color: var(--series-1); border: 1px solid var(--series-1);
+    padding: 2px 8px; letter-spacing: 0.08em; vertical-align: middle;
+  }
+  .entry-grid { display: grid; grid-template-columns: 170px 1fr; gap: 12px; }
+  .field label {
+    display: block; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); font-family: var(--font-mono); margin-bottom: 5px;
+  }
+  .field label .req { color: var(--series-1); }
+  .field input, .field select, .field textarea {
+    width: 100%; background: var(--page); color: var(--ink);
+    border: 1px solid var(--baseline); padding: 9px 10px;
+    font-family: var(--font-mono); font-size: 14px;
+    border-radius: 0; transition: border-color .15s;
+  }
+  .field textarea { font-family: var(--font-body); resize: vertical; min-height: 72px; line-height: 1.55; }
+  .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--series-1); }
+  .field.wide { grid-column: 1 / -1; }
+  .char-count { float: right; font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0; text-transform: none; }
+  .char-count.over { color: var(--critical); }
+  .entry-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 14px; margin-top: 18px; padding-top: 16px;
+    border-top: 1px dashed var(--baseline);
+  }
+  .pin-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); cursor: pointer; user-select: none; }
+  .pin-toggle input { accent-color: var(--series-1); width: 15px; height: 15px; cursor: pointer; }
+  button {
+    font-family: var(--font-body); font-weight: 700; font-size: 14px;
+    background: var(--series-1); color: #fff; border: none;
+    padding: 11px 28px; cursor: pointer; letter-spacing: 0.04em;
+    transition: transform .1s, filter .15s;
+  }
+  button:hover { filter: brightness(1.12); }
+  button:active { transform: translateY(1px); }
+  button.ghost {
+    background: transparent; color: var(--ink-2);
+    border: 1px solid var(--baseline); font-weight: 500; padding: 8px 16px; font-size: 12px;
+  }
+  button.ghost:hover { border-color: var(--muted); color: var(--ink); }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 10px; }
+
+  /* ─── 필터 바 ──────────────────────────────────────────── */
+  .filter-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
+  .chip {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em;
+    background: transparent; color: var(--ink-2);
+    border: 1px solid var(--baseline); padding: 5px 11px; cursor: pointer;
+    transition: border-color .15s, color .15s;
+  }
+  .chip:hover { border-color: var(--muted); color: var(--ink); }
+  .chip.on { border-color: var(--series-1); color: var(--series-1); background: rgba(57,135,229,0.08); }
+  .chip .cnt { opacity: 0.65; margin-left: 4px; }
+  .search-box {
+    margin-left: auto; background: var(--page); color: var(--ink);
+    border: 1px solid var(--baseline); padding: 7px 11px;
+    font-family: var(--font-mono); font-size: 12px; min-width: 190px; border-radius: 0;
+  }
+  .search-box:focus { outline: none; border-color: var(--series-1); }
+
+  /* ─── 노트 카드 ─────────────────────────────────────────── */
+  .notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+  .note-card {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-left: 4px solid var(--muted);
+    padding: 14px 16px 10px; display: flex; flex-direction: column; gap: 6px;
+    transition: border-color .15s;
+  }
+  .note-card:hover { border-color: var(--muted); border-left-color: var(--cat, var(--muted)); }
+  .note-card { border-left-color: var(--cat, var(--muted)); }
+  .note-card.editing { outline: 1px solid var(--series-1); }
+  .note-card.archived { opacity: 0.45; }
+  .note-head { display: flex; align-items: baseline; gap: 8px; }
+  .note-cat {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em;
+    color: var(--cat, var(--muted)); text-transform: uppercase; white-space: nowrap;
+  }
+  .note-pin { color: var(--warning); font-size: 12px; }
+  .note-title { font-weight: 700; font-size: 14px; color: var(--ink); }
+  .note-content { font-size: 13px; color: var(--ink-2); white-space: pre-wrap; }
+  .note-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .note-tags span {
+    font-family: var(--font-mono); font-size: 10.5px; color: var(--muted);
+    border: 1px solid var(--grid); padding: 1px 6px;
+  }
+  .note-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: auto; padding-top: 8px; border-top: 1px solid var(--grid);
+  }
+  .note-date { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); }
+  .note-actions { display: flex; gap: 2px; }
+  .note-actions button {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-family: var(--font-mono); font-size: 11px; padding: 2px 7px; font-weight: 500;
+  }
+  .note-actions button:hover { color: var(--ink); filter: none; }
+  .note-actions button.danger:hover { color: var(--critical); }
+  .empty-note {
+    color: var(--muted); font-size: 13px; padding: 26px;
+    border: 1px dashed var(--baseline); text-align: center; grid-column: 1 / -1;
+  }
+
+  /* ─── RAG 컨텍스트 패널 ─────────────────────────────────── */
+  .rag-panel { background: var(--surface-1); border: 1px solid var(--border); }
+  .rag-head {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+    padding: 12px 16px; border-bottom: 1px solid var(--grid);
+  }
+  .rag-meta { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .rag-meta strong { color: var(--series-1); font-weight: 600; }
+  .rag-body {
+    margin: 0; padding: 16px 18px; overflow-x: auto;
+    font-family: var(--font-mono); font-size: 12.5px; line-height: 1.7;
+    color: var(--ink-2); white-space: pre-wrap; word-break: break-word;
+    max-height: 420px; overflow-y: auto;
+    background:
+      linear-gradient(rgba(57,135,229,0.03), transparent 120px);
+  }
+  .copy-ok { color: var(--good) !important; border-color: var(--good) !important; }
+
+  .footnote { margin-top: 32px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--grid); padding-top: 16px; }
+  .footnote strong { color: var(--ink-2); font-weight: 500; }
+  .footnote code {
+    font-family: var(--font-mono); font-size: 11px; color: var(--series-1);
+    background: var(--surface-2); padding: 1px 5px;
+  }
+
+  /* 진입 애니메이션 */
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  header, .entry, .filter-bar, .notes-grid, .rag-panel { animation: rise .5s cubic-bezier(.2,.8,.2,1) both; }
+  .entry { animation-delay: .05s; } .filter-bar { animation-delay: .1s; }
+  .notes-grid { animation-delay: .12s; } .rag-panel { animation-delay: .18s; }
+
+  /* ─── 모바일 ─────────────────────────────────────────── */
+  /* iOS는 16px 미만 입력창 포커스 시 화면을 자동 줌한다 → 터치 기기는 16px 고정 */
+  @media (pointer: coarse) {
+    .field input, .field select, .field textarea, .profile-mini, .search-box { font-size: 16px; }
+  }
+  @media (max-width: 640px) {
+    .wrap { padding-left: 14px; padding-right: 14px; padding-bottom: 60px; }
+    header { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .header-meta { text-align: left; width: 100%; }
+    .page-nav { justify-content: flex-start; }
+    .page-nav a { padding: 8px 14px; font-size: 12px; }
+    .entry { padding: 16px 14px; }
+    .entry-grid { grid-template-columns: 1fr; }
+    .search-box { margin-left: 0; width: 100%; }
+    .notes-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Health<span class="accent">/</span>Notes</h1>
+    <div class="header-meta">
+      건강 특이사항 · RAG 컨텍스트 · 프로필 <select id="profile-select" class="profile-mini"><option>…</option></select><br>
+      <strong id="note-count">노트 0건</strong> · <span id="pinned-count">고정 0</span>
+      <nav class="page-nav">
+        <a href="/" data-keep-profile style="color:var(--series-2);border-color:var(--series-2)">Workout</a>
+        <a href="/body" data-keep-profile>Body Log</a>
+        <a href="/inbody" data-keep-profile>InBody</a>
+        <a href="/dashboard">Records</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- 입력 -->
+  <div class="sec-label"><span class="n">01</span> 노트 작성 <span class="edit-badge" id="edit-badge">수정 중</span></div>
+  <div class="entry" id="entry">
+    <div class="entry-grid">
+      <div class="field">
+        <label>카테고리 <span class="req">*</span></label>
+        <select id="in-cat"></select>
+      </div>
+      <div class="field">
+        <label>제목 <span class="req">*</span> <span class="char-count" id="cc-title"></span></label>
+        <input type="text" id="in-title" maxlength="120" placeholder="핵심 한 줄 — 예: 요산 수치 경계 (7.2)">
+      </div>
+      <div class="field wide">
+        <label>내용 <span class="req">*</span> <span class="char-count" id="cc-content"></span></label>
+        <textarea id="in-content" maxlength="1000" placeholder="축약된 사실 하나만 — 예: 2024 검진 요산 7.2mg/dL(상한 7.0). 맥주·내장류 줄이는 중, 2026 검진에서 재확인 예정."></textarea>
+      </div>
+      <div class="field wide">
+        <label>태그 (쉼표 구분)</label>
+        <input type="text" id="in-tags" placeholder="요산, 통풍, 검진">
+      </div>
+    </div>
+    <div class="entry-foot">
+      <label class="pin-toggle"><input type="checkbox" id="in-pinned"> ★ 중요 — 목록·컨텍스트 상단 고정</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="ghost" id="btn-cancel-edit" style="display:none">수정 취소</button>
+        <button id="btn-save">노트 저장</button>
+      </div>
+    </div>
+    <div class="hint">노트 한 건 = 사실 하나. 길게 쓰지 말고 쪼개서 기록할수록 RAG 검색·주입 품질이 좋아집니다.</div>
+  </div>
+
+  <!-- 목록 -->
+  <div class="sec-label"><span class="n">02</span> 노트 목록</div>
+  <div class="filter-bar" id="filter-bar">
+    <input type="search" class="search-box" id="search" placeholder="제목·내용·태그 검색…">
+  </div>
+  <div class="notes-grid" id="notes-grid">
+    <div class="empty-note">아직 노트가 없습니다. 위에서 첫 건강 특이사항을 기록하세요 — 예: 알레르기, 복용 약, 검진 경계치.</div>
+  </div>
+
+  <!-- RAG 컨텍스트 -->
+  <div class="sec-label"><span class="n">03</span> RAG 컨텍스트 미리보기</div>
+  <div class="rag-panel">
+    <div class="rag-head">
+      <div class="rag-meta" id="rag-meta">GET <strong>/notes/context</strong> · —</div>
+      <div style="display:flex;gap:8px">
+        <button class="ghost" id="btn-rag-refresh">새로고침</button>
+        <button class="ghost" id="btn-rag-copy">클립보드 복사</button>
+      </div>
+    </div>
+    <pre class="rag-body" id="rag-body">노트를 저장하면 LLM 프롬프트에 바로 붙여넣을 수 있는 축약 텍스트가 생성됩니다.</pre>
+  </div>
+
+  <div class="footnote">
+    <strong>API</strong> —
+    목록 <code>GET /notes/records?profile=…&amp;q=…&amp;category=…</code> ·
+    RAG 컨텍스트 <code>GET /notes/context?profile=…</code> (보관 노트 제외, 카테고리별 그룹) ·
+    생성 <code>POST /notes/records</code> · 수정 <code>PUT /notes/records/{id}</code> · 삭제 <code>DELETE /notes/records/{id}</code>.
+    보관(archive)한 노트는 목록 하단에 남지만 컨텍스트에서는 빠집니다 — 더 이상 유효하지 않은 사실은 지우지 말고 보관하세요.
+  </div>
+
+</div>
+
+<script>
+"use strict";
+/* ───────────────────────── 저장소 (서버 DB) ─────────────────
+   기록은 /notes/records API(→ Turso/SQLite)에 저장. localStorage는
+   프로필 선택 등 UI 편의값에만 사용. */
+let PROFILE_SLUG = (() => {
+  try {
+    const fromUrl = new URLSearchParams(location.search).get("profile");
+    if (fromUrl) return fromUrl;
+    return localStorage.getItem("ydocter-profile") || "";
+  } catch { return ""; }
+})();
+const Q = () => PROFILE_SLUG ? `?profile=${encodeURIComponent(PROFILE_SLUG)}` : "";
+function persistProfile(slug) {
+  PROFILE_SLUG = slug;
+  try { localStorage.setItem("ydocter-profile", slug); } catch {}
+  document.cookie = `ydocter_profile=${encodeURIComponent(slug)}; Max-Age=31536000; Path=/; SameSite=Lax`;
+  try {
+    const u = new URL(location.href);
+    u.searchParams.set("profile", slug);
+    history.replaceState(null, "", u.pathname + u.search);
+  } catch {}
+  document.querySelectorAll("a[data-keep-profile]").forEach(a => {
+    try {
+      const u = new URL(a.getAttribute("href"), location.origin);
+      u.searchParams.set("profile", slug);
+      a.setAttribute("href", u.pathname + u.search);
+    } catch {}
+  });
+}
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try { const j = await res.json(); if (j.detail) msg = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail); } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+async function initProfileSwitcher(onSwitch) {
+  const sel = document.getElementById("profile-select");
+  try {
+    const profiles = await api("/profiles");
+    if (!profiles.length) { sel.style.display = "none"; return; }
+    sel.innerHTML = profiles.map(p => `<option value="${p.slug}">${p.display_name}</option>`).join("");
+    if (!profiles.some(p => p.slug === PROFILE_SLUG)) PROFILE_SLUG = profiles[0].slug;
+    persistProfile(PROFILE_SLUG);
+    sel.value = PROFILE_SLUG;
+    sel.addEventListener("change", async () => {
+      persistProfile(sel.value);
+      await onSwitch();
+    });
+  } catch { sel.style.display = "none"; }
+}
+
+/* ───────────────────────── 카테고리 메타 ──────────────────── */
+const CATS = [
+  { key: "condition",  label: "질환·진단",   color: "var(--series-2)" },
+  { key: "medication", label: "약물·보충제", color: "var(--series-1)" },
+  { key: "allergy",    label: "알레르기·금기", color: "var(--critical)" },
+  { key: "symptom",    label: "증상·반응",   color: "var(--warning)" },
+  { key: "lifestyle",  label: "생활·습관",   color: "var(--good)" },
+  { key: "family",     label: "가족력",      color: "var(--serious)" },
+  { key: "goal",       label: "목표·계획",   color: "var(--teal)" },
+  { key: "other",      label: "기타",        color: "var(--muted)" },
+];
+const catMeta = (key) => CATS.find(c => c.key === key) || CATS[CATS.length - 1];
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/* ───────────────────────── 상태 ──────────────────────────── */
+let notes = [];
+let editingId = null;
+let filterCat = "all";   // all | 카테고리 key | archived
+let filterQ = "";
+
+/* ───────────────────────── CRUD ──────────────────────────── */
+async function reloadNotes() {
+  notes = await api(`/notes/records${Q()}${Q() ? "&" : "?"}include_archived=true`);
+}
+const createNote = (body) => api(`/notes/records${Q()}`, {
+  method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+});
+const updateNote = (id, body) => api(`/notes/records/${id}${Q()}`, {
+  method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+});
+const deleteNote = (id) => api(`/notes/records/${id}${Q()}`, { method: "DELETE" });
+
+/* ───────────────────────── 렌더 ──────────────────────────── */
+function renderCounts() {
+  const active = notes.filter(n => !n.archived);
+  document.getElementById("note-count").textContent = `노트 ${active.length}건`;
+  document.getElementById("pinned-count").textContent = `고정 ${active.filter(n => n.pinned).length}`;
+}
+
+function renderChips() {
+  const bar = document.getElementById("filter-bar");
+  bar.querySelectorAll(".chip").forEach(el => el.remove());
+  const active = notes.filter(n => !n.archived);
+  const archivedCount = notes.length - active.length;
+  const chips = [{ key: "all", label: "전체", cnt: active.length }];
+  for (const c of CATS) {
+    const cnt = active.filter(n => n.category === c.key).length;
+    if (cnt) chips.push({ key: c.key, label: c.label, cnt });
+  }
+  if (archivedCount) chips.push({ key: "archived", label: "보관", cnt: archivedCount });
+  const search = document.getElementById("search");
+  for (const c of chips.reverse()) {
+    const b = document.createElement("button");
+    b.className = "chip" + (filterCat === c.key ? " on" : "");
+    b.innerHTML = `${esc(c.label)}<span class="cnt">${c.cnt}</span>`;
+    b.addEventListener("click", () => { filterCat = c.key; renderList(); renderChips(); });
+    bar.insertBefore(b, bar.firstChild);
+  }
+  bar.appendChild(search); // 검색창은 항상 오른쪽 끝
+}
+
+function visibleNotes() {
+  let rs = [...notes];
+  if (filterCat === "archived") rs = rs.filter(n => n.archived);
+  else {
+    rs = rs.filter(n => !n.archived);
+    if (filterCat !== "all") rs = rs.filter(n => n.category === filterCat);
+  }
+  if (filterQ) {
+    const q = filterQ.toLowerCase();
+    rs = rs.filter(n =>
+      n.title.toLowerCase().includes(q) ||
+      n.content.toLowerCase().includes(q) ||
+      (n.tags || "").toLowerCase().includes(q));
+  }
+  // 고정 먼저, 이후 카테고리 순 → 최근 수정순
+  const catIdx = (k) => CATS.findIndex(c => c.key === k);
+  return rs.sort((a, b) =>
+    (b.pinned - a.pinned) || (catIdx(a.category) - catIdx(b.category)) ||
+    b.updated_at.localeCompare(a.updated_at));
+}
+
+function renderList() {
+  const grid = document.getElementById("notes-grid");
+  const rs = visibleNotes();
+  if (!rs.length) {
+    grid.innerHTML = `<div class="empty-note">${notes.length ? "조건에 맞는 노트가 없습니다." : "아직 노트가 없습니다. 위에서 첫 건강 특이사항을 기록하세요 — 예: 알레르기, 복용 약, 검진 경계치."}</div>`;
+    return;
+  }
+  grid.innerHTML = rs.map(n => {
+    const c = catMeta(n.category);
+    const tags = (n.tags || "").split(",").map(t => t.trim()).filter(Boolean);
+    return `<div class="note-card${n.archived ? " archived" : ""}${n.id === editingId ? " editing" : ""}" style="--cat:${c.color}" data-id="${n.id}">
+      <div class="note-head">
+        <span class="note-cat">${esc(c.label)}</span>
+        ${n.pinned ? '<span class="note-pin">★</span>' : ""}
+      </div>
+      <div class="note-title">${esc(n.title)}</div>
+      <div class="note-content">${esc(n.content)}</div>
+      ${tags.length ? `<div class="note-tags">${tags.map(t => `<span>#${esc(t)}</span>`).join("")}</div>` : ""}
+      <div class="note-foot">
+        <span class="note-date">${esc(n.updated_at.slice(0, 10))}</span>
+        <div class="note-actions">
+          <button data-act="edit">수정</button>
+          <button data-act="pin">${n.pinned ? "고정해제" : "고정"}</button>
+          <button data-act="archive">${n.archived ? "복원" : "보관"}</button>
+          <button data-act="del" class="danger">삭제</button>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+/* ───────────────────────── RAG 패널 ──────────────────────── */
+async function refreshContext() {
+  const meta = document.getElementById("rag-meta");
+  const body = document.getElementById("rag-body");
+  try {
+    const ctx = await api(`/notes/context${Q()}`);
+    body.textContent = ctx.note_count ? ctx.text : "노트를 저장하면 LLM 프롬프트에 바로 붙여넣을 수 있는 축약 텍스트가 생성됩니다.";
+    meta.innerHTML = `GET <strong>/notes/context</strong> · ${ctx.note_count}건 · ${ctx.text.length.toLocaleString()}자`;
+  } catch (e) {
+    body.textContent = `컨텍스트 로딩 실패: ${e.message}`;
+  }
+}
+
+/* ───────────────────────── 폼 ────────────────────────────── */
+const $ = (id) => document.getElementById(id);
+
+function fillCatSelect() {
+  $("in-cat").innerHTML = CATS.map(c => `<option value="${c.key}">${c.label}</option>`).join("");
+}
+function resetForm() {
+  editingId = null;
+  $("in-cat").value = "other";
+  $("in-title").value = "";
+  $("in-content").value = "";
+  $("in-tags").value = "";
+  $("in-pinned").checked = false;
+  $("entry").classList.remove("editing");
+  $("edit-badge").style.display = "none";
+  $("btn-cancel-edit").style.display = "none";
+  updateCharCounts();
+}
+function fillForm(n) {
+  editingId = n.id;
+  $("in-cat").value = n.category;
+  $("in-title").value = n.title;
+  $("in-content").value = n.content;
+  $("in-tags").value = n.tags || "";
+  $("in-pinned").checked = n.pinned;
+  $("entry").classList.add("editing");
+  $("edit-badge").style.display = "inline-block";
+  $("btn-cancel-edit").style.display = "inline-block";
+  updateCharCounts();
+  $("entry").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function formPayload(base = {}) {
+  return {
+    category: $("in-cat").value,
+    title: $("in-title").value.trim(),
+    content: $("in-content").value.trim(),
+    tags: $("in-tags").value.trim() || null,
+    pinned: $("in-pinned").checked,
+    archived: base.archived ?? false,
+  };
+}
+function updateCharCounts() {
+  const t = $("in-title").value.length, c = $("in-content").value.length;
+  $("cc-title").textContent = t ? `${t}/120` : "";
+  $("cc-content").textContent = c ? `${c}/1000` : "";
+  $("cc-content").classList.toggle("over", c > 1000);
+}
+
+async function saveForm() {
+  const p = formPayload();
+  if (!p.title) { $("in-title").focus(); return; }
+  if (!p.content) { $("in-content").focus(); return; }
+  const btn = $("btn-save");
+  btn.disabled = true;
+  try {
+    if (editingId != null) {
+      const existing = notes.find(n => n.id === editingId);
+      await updateNote(editingId, formPayload({ archived: existing?.archived ?? false }));
+    } else {
+      await createNote(p);
+    }
+    resetForm();
+    await refreshAll();
+  } catch (e) {
+    alert(`저장 실패: ${e.message}`);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ───────────────────────── 이벤트 ────────────────────────── */
+document.getElementById("notes-grid").addEventListener("click", async (ev) => {
+  const btn = ev.target.closest("button[data-act]");
+  if (!btn) return;
+  const card = btn.closest(".note-card");
+  const id = Number(card.dataset.id);
+  const n = notes.find(x => x.id === id);
+  if (!n) return;
+  const act = btn.dataset.act;
+  try {
+    if (act === "edit") { fillForm(n); renderList(); return; }
+    if (act === "pin") {
+      await updateNote(id, { category: n.category, title: n.title, content: n.content, tags: n.tags, pinned: !n.pinned, archived: n.archived });
+    } else if (act === "archive") {
+      await updateNote(id, { category: n.category, title: n.title, content: n.content, tags: n.tags, pinned: n.pinned, archived: !n.archived });
+    } else if (act === "del") {
+      if (!confirm(`삭제할까요?\n\n"${n.title}"\n\n(무효해진 사실은 삭제 대신 '보관'을 권장)`)) return;
+      await deleteNote(id);
+      if (editingId === id) resetForm();
+    }
+    await refreshAll();
+  } catch (e) {
+    alert(`실패: ${e.message}`);
+  }
+});
+
+$("btn-save").addEventListener("click", saveForm);
+$("btn-cancel-edit").addEventListener("click", () => { resetForm(); renderList(); });
+$("in-title").addEventListener("input", updateCharCounts);
+$("in-content").addEventListener("input", updateCharCounts);
+$("in-content").addEventListener("keydown", (ev) => {
+  if ((ev.metaKey || ev.ctrlKey) && ev.key === "Enter") saveForm();
+});
+$("search").addEventListener("input", (ev) => { filterQ = ev.target.value.trim(); renderList(); });
+$("btn-rag-refresh").addEventListener("click", refreshContext);
+$("btn-rag-copy").addEventListener("click", async () => {
+  const btn = $("btn-rag-copy");
+  try {
+    await navigator.clipboard.writeText($("rag-body").textContent);
+    btn.textContent = "복사됨 ✓"; btn.classList.add("copy-ok");
+    setTimeout(() => { btn.textContent = "클립보드 복사"; btn.classList.remove("copy-ok"); }, 1600);
+  } catch { alert("클립보드 접근이 차단되었습니다. 텍스트를 직접 선택해 복사하세요."); }
+});
+
+/* ───────────────────────── 부트 ──────────────────────────── */
+async function refreshAll() {
+  await reloadNotes();
+  renderCounts();
+  renderChips();
+  renderList();
+  await refreshContext();
+}
+(async () => {
+  fillCatSelect();
+  resetForm();
+  await initProfileSwitcher(async () => { filterCat = "all"; filterQ = ""; $("search").value = ""; resetForm(); await refreshAll(); });
+  try { await refreshAll(); }
+  catch (e) { document.getElementById("notes-grid").innerHTML = `<div class="empty-note">로딩 실패: ${esc(e.message)}</div>`; }
+})();
+</script>
+</body>
+</html>

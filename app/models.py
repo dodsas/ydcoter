@@ -365,6 +365,76 @@ class WorkoutPlan(BaseModel):
     rules: List[str]
 
 
+NOTE_CATEGORIES = (
+    "condition",   # 질환·진단
+    "medication",  # 약물·보충제
+    "allergy",     # 알레르기·금기
+    "symptom",     # 증상·반응
+    "lifestyle",   # 생활·습관
+    "family",      # 가족력
+    "goal",        # 목표·계획
+    "other",       # 기타
+)
+
+NOTE_CATEGORY_LABELS = {
+    "condition": "질환·진단",
+    "medication": "약물·보충제",
+    "allergy": "알레르기·금기",
+    "symptom": "증상·반응",
+    "lifestyle": "생활·습관",
+    "family": "가족력",
+    "goal": "목표·계획",
+    "other": "기타",
+}
+
+
+class HealthNoteIn(BaseModel):
+    """Upsert payload for one health note — 한 건 = 원자적 사실 하나.
+
+    RAG 청크로 쓰이므로 content 는 축약된 사실로 제한한다 (1000자).
+    tags 는 쉼표 구분 키워드 — /notes/records?q= 검색과 컨텍스트 생성에
+    해시태그로 노출된다.
+    """
+
+    category: str = "other"
+    title: str
+    content: str
+    tags: Optional[str] = None
+    pinned: bool = False    # 목록·컨텍스트 상단 고정
+    archived: bool = False  # 컨텍스트 생성에서 제외
+
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _check(self):
+        if self.category not in NOTE_CATEGORIES:
+            raise ValueError(f"category must be one of {', '.join(NOTE_CATEGORIES)}")
+        if not self.title.strip():
+            raise ValueError("title must not be empty")
+        if len(self.title) > 120:
+            raise ValueError("title must be ≤ 120 chars")
+        if not self.content.strip():
+            raise ValueError("content must not be empty")
+        if len(self.content) > 1000:
+            raise ValueError("content must be ≤ 1000 chars — 축약해서 기록하세요")
+        return self
+
+
+class HealthNote(HealthNoteIn):
+    id: int
+    updated_at: str
+
+
+class NotesContext(BaseModel):
+    """RAG 컨텍스트 — 노트를 카테고리별로 묶어 LLM 프롬프트에 바로 주입
+    가능한 축약 텍스트로 변환한 결과 (GET /notes/context)."""
+
+    profile_slug: str
+    generated_at: str
+    note_count: int
+    text: str
+
+
 class HealthRecordItem(BaseModel):
     """검진 지표 한 건 — 이름/단위/참고치를 포함한 자기완결형 행.
 
