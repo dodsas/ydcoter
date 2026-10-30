@@ -1308,6 +1308,18 @@ def update_reference(item_id: int, body: ReferenceUpdate) -> TestItem:
 if (WEB_DIR / "assets").exists():
     app.mount("/assets", StaticFiles(directory=str(WEB_DIR / "assets")), name="assets")
 
+DOCS_DIR = WEB_DIR.parent / "docs"
+
+
+@app.get("/docs/API.md", include_in_schema=False)
+def api_doc_raw() -> FileResponse:
+    """API 레퍼런스 원문 — /apidoc 뷰어가 fetch 하고, curl 로도 받을 수 있다.
+    FastAPI 기본 /docs(Swagger UI)와는 경로가 달라 충돌하지 않는다."""
+    path = DOCS_DIR / "API.md"
+    if not path.exists():
+        raise HTTPException(404, "docs/API.md not found")
+    return FileResponse(path, media_type="text/markdown; charset=utf-8")
+
 
 def _resolve_commit() -> str:
     # Render exposes RENDER_GIT_COMMIT; locally we read from .git.
@@ -1394,3 +1406,8 @@ def inbody_page() -> HTMLResponse:
 @app.get("/notes", include_in_schema=False)
 def notes_page() -> HTMLResponse:
     return _render_html("notes.html")
+
+
+@app.get("/apidoc", include_in_schema=False)
+def apidoc_page() -> HTMLResponse:
+    return _render_html("apidoc.html")

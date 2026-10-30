@@ -4,6 +4,8 @@
 요청/응답 예시를 제공한다. 라이브로 쏴보는 용도는 Swagger(`/docs`)를 쓰고,
 구현할 때는 이 문서를 기준으로 삼으면 된다.
 
+서버에서 보는 법: 렌더링된 뷰어 **`/apidoc`** · 원문 **`/docs/API.md`**
+
 - 로컬: `http://127.0.0.1:8000`
 - 모든 요청/응답은 JSON (`Content-Type: application/json`)
 - 날짜는 전부 ISO `YYYY-MM-DD` 문자열. 형식이 틀리면 `422`.
